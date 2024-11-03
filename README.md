@@ -1,2 +1,3 @@
 # BitBang-UART
-Hardware independent bitbang UART library with support for Rx and Tx
+Timer-interrupt-based hardware independent bitbang UART driver library with
+support for receiving and transmitting data.
