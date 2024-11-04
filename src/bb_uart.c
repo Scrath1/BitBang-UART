@@ -9,9 +9,10 @@
  *  the current configuration. This includes the start bit, data bits,
  *  parity bit and stop bits
  * @param uartPtr [IN] pointer to uart struct
- * @return number of bits in single UART frame
+ * @return number of bits in single UART frame or 0 if uartPtr is NULL
  */
 uint8_t BB_UART_calculateFrameSize(const BB_UART_t* const uartPtr){
+    if(uartPtr == NULL) return 0;
     uint8_t cnt = 1; // start with 1 to include the start bit
     cnt += (uint8_t)(uartPtr->wordLen);
     if(uartPtr->parity != BB_UART_PARITY_NONE) cnt++;
@@ -72,6 +73,12 @@ RC_t BB_UART_createNextFrame(BB_UART_t* uartPtr){
     return RC_SUCCESS;
 }
 
+/**
+ * @brief Function to call during callback of timer to transmit the next bit.
+ * May be overwritten depending on hardware.
+ * @return RC_ERROR_NULL if uartPtr is NULL,
+ *  RC_ERROR_BUFFER_EMPTY if transmission of current frame is finished
+ */
 RC_t BB_UART_transmitBit(BB_UART_t* uartPtr){
     if(uartPtr == NULL) return RC_ERROR_NULL;
     if(uartPtr->__tx_internal.remainingFrameBits == 0){
@@ -274,10 +281,12 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
     return RC_SUCCESS;
 }
 
-RC_t BB_UART_timerCallback(BB_UART_t* uartPtr){
+RC_t BB_UART_service(BB_UART_t* uartPtr){
+    if(uartPtr == NULL) return RC_ERROR_NULL;
     // Shortcut variable
     uint8_t* overSampleCounter = &(uartPtr->__rx_internal.overSampleCounter);
 
+    RC_t err = RC_SUCCESS;
     switch(uartPtr->mode){
         case BB_UART_TX_ONLY:
             // transmit the next bit in the tx frame
@@ -294,19 +303,19 @@ RC_t BB_UART_timerCallback(BB_UART_t* uartPtr){
                 // depending on oversampling setting
                 if(*overSampleCounter == 0){
                     // rx is idle and it is time to transmit a new bit
-                    BB_UART_transmitBit(uartPtr);
+                    (void)BB_UART_transmitBit(uartPtr);
                 }
             }
             else{
                 // Rx line is receiving data
-                BB_UART_receiveBit(uartPtr);
+                err = BB_UART_receiveBit(uartPtr);
             }
             break;
         case BB_UART_RX_TX:
             if(*overSampleCounter == 0){
-                BB_UART_transmitBit(uartPtr);
+                (void)BB_UART_transmitBit(uartPtr);
             }
-            BB_UART_receiveBit(uartPtr);
+            err = BB_UART_receiveBit(uartPtr);
             break;
         default:
             return RC_ERROR_INVALID_STATE;
@@ -314,7 +323,7 @@ RC_t BB_UART_timerCallback(BB_UART_t* uartPtr){
 
     // increment oversample counter and if required reset it to 0
     *overSampleCounter = (*overSampleCounter+1) % (uint8_t)(uartPtr->oversampling);
-    return RC_ERROR_NOT_IMPLEMENTED;
+    return err;
 }
 
 RC_t BB_UART_put(BB_UART_t* uartPtr, const uint8_t* data, uint32_t wordLen){

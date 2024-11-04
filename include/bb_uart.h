@@ -36,6 +36,9 @@ extern "C" {
  *      - tx complete
  *          ...
  * Maybe define weak functions and pass the uart object to them for identification
+ * 
+ * - Rework ring buffer so that when the rx buffer is full the oldest value is
+ *  overwritten rather than dropping the newest value
  */
 
 // UART settings
@@ -141,26 +144,37 @@ typedef struct{
 RC_t BB_UART_validateConfig(BB_UART_t* uartPtr);
 
 /**
- * @brief Function to call during callback of timer to transmit the next bit.
- * May be overwritten depending on hardware.
- * @return RC_ERROR_NULL if uartPtr is NULL,
- *  RC_ERROR_BUFFER_EMPTY if transmission of current frame is finished
+ * @brief Function which has to be called with a frequency of
+ *  the baudrate * oversampling setting for the UART to work.
+ * @param uartPtr [IN] pointer to uart struct
+ * @return RC_SUCCESS on success
+ * @return RC_ERROR_NULL if uartPtr is NULL
+ * @return RC_ERROR_INVALID_STATE if the UART mode is not a valid value
+ * @return RC_ERROR_BUFFER_FULL if the Rx buffer is full
  */
-RC_t BB_UART_transmitBit(BB_UART_t* uartPtr);
-
-RC_t BB_UART_receiveBit(BB_UART_t* uartPtr);
-
-RC_t BB_UART_timerCallback(BB_UART_t* uartPtr);
+RC_t BB_UART_service(BB_UART_t* uartPtr);
 
 /**
  * @brief Adds data to tx_buffer and begins transmission.
+ * @param uartPtr [IN] pointer to uart struct
+ * @param data [IN] pointer to data which should be transmitted
+ * @param dataLen [IN] number of bytes to transmit
+ * @return RC_SUCCESS on success
  * @return RC_ERROR_NULL if uartPtr is NULL,
- *  RC_ERROR_BUFFER_FULL if the data does not fit into the available space in
- *      the tx buffer. In that case, no data is added to transmission.
- * 
+ * @return RC_ERROR_BUFFER_FULL if the data does not fit into the available
+ *  space in the tx buffer. In that case, no data is added to transmission.
  */
 RC_t BB_UART_put(BB_UART_t* uartPtr, const uint8_t* data, uint32_t dataLen);
 
+/**
+ * @brief Adds a single char to the transmit buffer
+ * @param uartPtr [IN] pointer to uart struct
+ * @param c [IN] char to transmit
+ * @return RC_SUCCESS on success
+ * @return RC_ERROR_NULL if uartPtr is NULL,
+ * @return RC_ERROR_BUFFER_FULL if the data does not fit into the available
+ *  space in the tx buffer. In that case, no data is added to transmission.
+ */
 RC_t BB_UART_putc(BB_UART_t* uartPtr, char c);
 
 #ifdef __cplusplus
