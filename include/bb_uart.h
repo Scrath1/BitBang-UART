@@ -29,14 +29,6 @@ extern "C" {
  */
 
 /**
- * ToDo:
- * - Add user callback functions
- *      - byte received
- *      - rx buffer full or half full
- *      - tx complete
- *          ...
- * Maybe define weak functions and pass the uart object to them for identification
- * 
  * - Rework ring buffer so that when the rx buffer is full the oldest value is
  *  overwritten rather than dropping the newest value
  */
@@ -78,6 +70,8 @@ typedef enum{
     BB_UART_TX_IDLE,
     // Currently in the process of transmitting a uart frame
     BB_UART_TX_TRANSMITTING_FRAME,
+    // Frame was successfully transmitted
+    BB_UART_TX_FRAME_TRANSMITTED,
     // All contents of tx buffer have been transmitted
     BB_UART_TX_BUFFER_TRANSMITTED,
     // Tx line is blocked, e.g. because UART is in one-wire mode and is
@@ -88,6 +82,8 @@ typedef enum{
 typedef enum{
     // Waiting for detection of start bit
     BB_UART_RX_IDLE,
+    // Rx line is trying to align its sampling based on the start bit
+    BB_UART_RX_ALIGNING,
     // Currently in the process of receiving a uart frame
     BB_UART_RX_RECEIVING_FRAME,
     // a frame was fully received. UART is preparing for next frame reception
@@ -100,8 +96,22 @@ typedef enum{
 typedef enum{
     BB_UART_OVERSAMPLE_1 = 1, // No oversampling at all. Only recommended for Tx only mode
     BB_UART_OVERSAMPLE_3 = 3, // 3 bit samples are taken per rx bit
-    BB_UART_Oversample_5 = 5, // 5 bit samples are taken per rx bit
+    BB_UART_OVERSAMPLE_5 = 5, // 5 bit samples are taken per rx bit
+    BB_UART_OVERSAMPLE_7 = 7
 } BB_UART_Oversampling_t;
+
+typedef enum{
+    // No error detected
+    BB_UART_RX_ERROR_NONE = 0b0,
+    // parity in received frame does not match
+    BB_UART_RX_ERROR_PARITY = 0b1,
+    // too few bits received
+    BB_UART_RX_ERROR_BITCOUNT = 0b10,
+    // Start bit doesn't have correct logic level
+    BB_UART_RX_ERROR_STARTBIT = 0b100,
+    // One or more Stop bits don't have correct logic level
+    BB_UART_RX_ERROR_STOPBITS = 0b1000,
+} BB_UART_Rx_Frame_Error_t;
 
 typedef struct{
     BB_UART_Wordlength_t wordLen;
@@ -157,11 +167,14 @@ typedef struct{
         // a single frame. This value is reset when a start bit from a new
         // frame is detected.
         uint8_t receivedBitsCnt;
-        // If in one wire mode, this variable represents the number of bit
+        // If in one wire mode, this variable represents the number of service
         // cycles to wait after a full frame reception before reenabling the tx
         // line. If the uart is not in one-wire mode, this variable should always
         // be 0.
         uint8_t cooldownCycles;
+        // Expresses what is wrong with the last received frame.
+        // Multiple errors can be set as bits. Refer to BB_UART_Rx_Frame_Error_t
+        uint32_t error;
     } __rx_internal;
 } BB_UART_t;
 
@@ -209,6 +222,34 @@ RC_t BB_UART_put(BB_UART_t* uartPtr, const uint8_t* data, uint32_t dataLen);
  *  space in the tx buffer. In that case, no data is added to transmission.
  */
 RC_t BB_UART_putc(BB_UART_t* uartPtr, char c);
+
+/**
+ * @brief Executes when a tx frame was created but before the first bit is
+ *  transmitted.
+ */
+void txFrameStartedHook(BB_UART_t* uartPtr);
+/**
+ * @brief Executes when a tx frame was fully sent
+ */
+void txFrameCompleteHook(BB_UART_t* uartPtr);
+/**
+ * @brief Executes when the tx buffer is empty after a transmission
+ */
+void txTransmissionCompleteHook(BB_UART_t* uartPtr);
+/**
+ * @brief Executes when a start bit was detected
+ */
+void rxFrameStartDetectedHook(BB_UART_t* uartPtr);
+/**
+ * @brief Executes when a frame was fully received
+ */
+void rxFrameCompleteHook(BB_UART_t* uartPtr);
+
+void rxBlockedHook(BB_UART_t* uartPtr);
+void rxUnblockedHook(BB_UART_t* uartPtr);
+void txBlockedHook(BB_UART_t* uartPtr);
+void txUnblockedHook(BB_UART_t* uartPtr);
+void rxFrameErrorHook(BB_UART_t* uartPtr);
 
 #ifdef __cplusplus
 }

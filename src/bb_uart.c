@@ -85,39 +85,61 @@ RC_t BB_UART_createNextFrame(BB_UART_t* uartPtr){
  */
 RC_t BB_UART_transmitBit(BB_UART_t* uartPtr){
     if(uartPtr == NULL) return RC_ERROR_NULL;
+    uint8_t* remFrameBitPtr = &(uartPtr->__tx_internal.remainingFrameBits);
     switch(uartPtr->__tx_internal.state){
         case BB_UART_TX_IDLE:
-            if(ring_buffer_avail(uartPtr->tx_ringBuf) > 0){
+            // returns RC_ERROR_BUFFER_EMPTY if there is no data to transmit
+            if(RC_SUCCESS == BB_UART_createNextFrame(uartPtr)){
                 uartPtr->__tx_internal.state = BB_UART_TX_TRANSMITTING_FRAME;
                 // if in one wire-mode, block rx line while transmitting
                 if(uartPtr->mode == BB_UART_ONE_WIRE){
                     uartPtr->__rx_internal.state = BB_UART_RX_BLOCKED;
+                    rxBlockedHook(uartPtr);
                 }
             }
             break;
         case BB_UART_TX_TRANSMITTING_FRAME:
-            if(RC_ERROR_BUFFER_EMPTY == BB_UART_createNextFrame(uartPtr)){
-                // no more data to transmit
-                uartPtr->__tx_internal.state = BB_UART_TX_BUFFER_TRANSMITTED;
+            if(*remFrameBitPtr == BB_UART_calculateFrameSize(uartPtr)){
+                // execute once at beginning of frame transmission
+                txFrameStartedHook(uartPtr);
             }
-            if(uartPtr->__tx_internal.remainingFrameBits > 0){
+            if((*remFrameBitPtr) > 0){
                 // transmit next bit in frame and decrement remainingFrameBits
                 uint8_t b = uartPtr->__tx_internal.frame & 0b1; // get next bit
                 uartPtr->__tx_internal.frame >>= 1; // shift bit out of queue
-                uartPtr->__tx_internal.remainingFrameBits--;
+                (*remFrameBitPtr)--;
                 if(uartPtr->writePinFunc != NULL){
                     uartPtr->writePinFunc(b);
                 }
             }
+            if((*remFrameBitPtr) == 0){
+                uartPtr->__tx_internal.state = BB_UART_TX_FRAME_TRANSMITTED;
+            }
+            break;
+        case BB_UART_TX_FRAME_TRANSMITTED:
+            // must be executed here, otherwise the stop bit is not fully
+            // included in the hook
+            txFrameCompleteHook(uartPtr);
+            RC_t ret = BB_UART_createNextFrame(uartPtr);
+            if(RC_ERROR_BUFFER_EMPTY == ret){
+                // transmission finished, no more data in tx buffer
+                uartPtr->__tx_internal.state = BB_UART_TX_BUFFER_TRANSMITTED;
+            }
+            else if (RC_SUCCESS == ret){
+                // There was more data in the tx buffer.
+                // Send next frame
+                uartPtr->__tx_internal.state = BB_UART_TX_TRANSMITTING_FRAME;
+            }
             break;
         case BB_UART_TX_BUFFER_TRANSMITTED:
-            // ToDo: Potentially add a callback function here
             if(uartPtr->mode == BB_UART_ONE_WIRE){
                 // if in one-wire mode, unblock the rx line
                 uartPtr->__rx_internal.state = BB_UART_RX_IDLE;
+                rxUnblockedHook(uartPtr);
             }
             // return to idle state
             uartPtr->__tx_internal.state = BB_UART_TX_IDLE;
+            txTransmissionCompleteHook(uartPtr);
             break;
         case BB_UART_TX_BLOCKED:
             // do nothing
@@ -153,6 +175,7 @@ RC_t BB_UART_validateConfig(BB_UART_t* uartPtr){
     uartPtr->__rx_internal.state = BB_UART_RX_IDLE;
     uartPtr->__rx_internal.receivedBitsCnt = 0;
     uartPtr->__rx_internal.cooldownCycles = 0;
+    uartPtr->__rx_internal.frame = BB_UART_RX_ERROR_NONE;
     return RC_SUCCESS;
 }
 
@@ -180,25 +203,32 @@ uint32_t numOfSetBits(uint32_t var, uint32_t bitsToEval){
  * @return RC_SUCCESS if data frame was valid and data was extracted.
  * @return RC_ERROR_NULL if uartPtr or dataOut were nullptrs
  * @return RC_ERROR_INVALID_STATE if received bits don't match expected
- *  frame size.
+ *  frame size. If frame is also invalid, RC_ERROR_INVALID is returned instead.
  * @return RC_ERROR_INVALID if the frame contains errors
  */
-RC_t BB_UART_extractData(const BB_UART_t* const uartPtr, uint16_t* dataOut){
+RC_t BB_UART_extractData(BB_UART_t* uartPtr, uint16_t* dataOut){
     if(uartPtr == NULL) return RC_ERROR_NULL;
     if(dataOut == NULL) return RC_ERROR_NULL;
+    // reset error flag
+    uartPtr->__rx_internal.error = BB_UART_RX_ERROR_NONE;
+    RC_t ret = RC_SUCCESS;
 
     // ensure frame was fully received
     const uint32_t expectedFrameSize = BB_UART_calculateFrameSize(uartPtr);
-    if(uartPtr->__rx_internal.receivedBitsCnt < expectedFrameSize)
-        return RC_ERROR_INVALID_STATE;
-    
+    if(uartPtr->__rx_internal.receivedBitsCnt < expectedFrameSize){
+        ret = RC_ERROR_INVALID_STATE;
+        uartPtr->__rx_internal.error |= BB_UART_RX_ERROR_BITCOUNT;
+    }
+
     uint16_t frame = uartPtr->__rx_internal.frame;
     // make sure all stop bits are high
     for(uint8_t i = 0; i < uartPtr->stopBits; i++){
         uint8_t sb = frame & 0b1;
         frame = frame >> 1;
-        if(sb != STOP_BIT_LEVEL)
-            return RC_ERROR_INVALID;
+        if(sb != STOP_BIT_LEVEL){
+            ret = RC_ERROR_INVALID;
+            uartPtr->__rx_internal.error |= BB_UART_RX_ERROR_STOPBITS;
+        }
     }
     uint8_t pb = 0;
     // Extract parity bit (if available) and save it for later
@@ -215,8 +245,10 @@ RC_t BB_UART_extractData(const BB_UART_t* const uartPtr, uint16_t* dataOut){
         data = (data << 1) | b;
     }
     // verify that a start bit is also present
-    if((frame & 0b1) != START_BIT_LEVEL)
-        return RC_ERROR_INVALID;
+    if((frame & 0b1) != START_BIT_LEVEL){
+        ret = RC_ERROR_INVALID;
+        uartPtr->__rx_internal.error |= BB_UART_RX_ERROR_STARTBIT;
+    }
 
     // evaluate parity if enabled
     if(uartPtr->parity != BB_UART_PARITY_NONE){
@@ -225,17 +257,19 @@ RC_t BB_UART_extractData(const BB_UART_t* const uartPtr, uint16_t* dataOut){
         uint8_t dataParity = __builtin_parity((data << 1) | pb);
         if(uartPtr->parity == BB_UART_PARITY_EVEN
             && dataParity == 1){
-                return RC_ERROR_INVALID;
+                ret = RC_ERROR_INVALID;
+                uartPtr->__rx_internal.error |= BB_UART_RX_ERROR_PARITY;
             }
         else if (uartPtr->parity == BB_UART_PARITY_ODD
             && dataParity == 0){
-                return RC_ERROR_INVALID;
+                ret = RC_ERROR_INVALID;
+                uartPtr->__rx_internal.error |= BB_UART_RX_ERROR_PARITY;
             }
     }
 
     // write back extracted data and return
     *dataOut = data;
-    return RC_SUCCESS;
+    return ret;
 }
 /**
  * @brief Samples UART line to detect transmitted bits
@@ -254,45 +288,61 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
     // Sample Rx line
     // ------------------------
     uint16_t* bitSamples = &(uartPtr->__rx_internal.bitSamples);
-    // bit sample
+    // absolute bit sample
     uint8_t b = uartPtr->readPinFunc();
     // shift bit sample into bitsamples
     *bitSamples = ((*bitSamples) << 1) | b;
-    // Count samples if oversample counter == 0
-
-    // If oversampling period is not over, return here
-    if(uartPtr->__rx_internal.overSampleCounter != 0){
-        return RC_SUCCESS;
-    }
-
-    // After all bit samples have been acquired, determine
-    // whether we received a high or low bit
-    uint8_t receivedBit = 0;
+    // average of the last couple of sampled bits
+    uint8_t averagedBit = 0;
     uint8_t highSamples = numOfSetBits(*bitSamples, (uint32_t)uartPtr->oversampling);
     // more than half of the samples need to be high for the final
     // bit to be high
     const uint8_t thresh = (uartPtr->oversampling/2)+1;
-    if(highSamples >= thresh) receivedBit = 1;
-    else receivedBit = 0;
+    if(highSamples >= thresh) averagedBit = 1;
+    else averagedBit = 0;
 
     // switch based on state
     uint16_t* framePtr = &(uartPtr->__rx_internal.frame);
     switch(uartPtr->__rx_internal.state){
         case BB_UART_RX_IDLE:
-            // check if a start bit was detected
-            if(receivedBit == START_BIT_LEVEL){
-                uartPtr->__rx_internal.state = BB_UART_RX_RECEIVING_FRAME;
-                // Make sure framebuffer is empty and add startbit
-                *framePtr = receivedBit;
-                uartPtr->__rx_internal.receivedBitsCnt = 1;
+            if(b == START_BIT_LEVEL){
+                // possible start of frame detected
+                uartPtr->__rx_internal.overSampleCounter = 0;
+                uartPtr->__rx_internal.state = BB_UART_RX_ALIGNING;
                 if(uartPtr->mode == BB_UART_ONE_WIRE){
                     // in one wire mode, block tx while receiving data
                     uartPtr->__tx_internal.state = BB_UART_TX_BLOCKED;
+                    txBlockedHook(uartPtr);
+                }
+            }
+            break;
+        case BB_UART_RX_ALIGNING:
+            // wait until reset of oversamplecounter before transitioning to
+            // actually receiving bits
+            if(uartPtr->__rx_internal.overSampleCounter == 0){
+                if(averagedBit != START_BIT_LEVEL){
+                    // False start detected. Revert to idle
+                    uartPtr->__rx_internal.state = BB_UART_RX_IDLE;
+                    if(uartPtr->mode == BB_UART_ONE_WIRE){
+                         uartPtr->__tx_internal.state = BB_UART_TX_IDLE;
+                        txUnblockedHook(uartPtr);
+                    }
+                }
+                else{
+                    // true start detected. Transition to receiving data
+                    uartPtr->__rx_internal.state = BB_UART_RX_RECEIVING_FRAME;
+                    // Make sure framebuffer is empty and add startbit
+                    *framePtr = averagedBit;
+                    uartPtr->__rx_internal.receivedBitsCnt = 1;
+                    rxFrameStartDetectedHook(uartPtr);
                 }
             }
             break;
         case BB_UART_RX_RECEIVING_FRAME:
-            *framePtr = ((*framePtr) << 1) | receivedBit;
+            // Only evaluate the sample every few cycles to allow for
+            // oversampling
+            if(uartPtr->__rx_internal.overSampleCounter != 0) break;
+            *framePtr = ((*framePtr) << 1) | averagedBit;
             const uint32_t frameSize = BB_UART_calculateFrameSize(uartPtr);
             uartPtr->__rx_internal.receivedBitsCnt++;
             // if the number of received bits matches the frame size
@@ -301,25 +351,30 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
                 uartPtr->__rx_internal.state = BB_UART_RX_FRAME_RECEIVED;
                 // check if frame is valid and extract the data
                 uint16_t data = 0;
+                RC_t ret = RC_SUCCESS;
                 if(RC_SUCCESS != BB_UART_extractData(uartPtr, &data)){
                     // frame was invalid
-                    return RC_ERROR_INVALID;
+                    rxFrameErrorHook(uartPtr);
+                    ret = RC_ERROR_INVALID;
                 }
                 else{
                     // frame was valid and data was extracted
                     // moving data to ringbuffer
                     if(RC_SUCCESS != ring_buffer_put(uartPtr->rx_ringBuf, (uint8_t) data)){
-                        return RC_ERROR_BUFFER_FULL;
+                        ret = RC_ERROR_BUFFER_FULL;
                     }
                 }
                 if(uartPtr->mode == BB_UART_ONE_WIRE){
                     // in one wire mode, block tx while receiving data
                     uartPtr->__rx_internal.cooldownCycles = COOLDOWN_CYCLES;
                 }
+                rxFrameCompleteHook(uartPtr);
+                return ret;
             }
             break;
         case BB_UART_RX_FRAME_RECEIVED:
             if(uartPtr->__rx_internal.cooldownCycles == 0){
+                // execute rx frame complete hook
                 // revert to idle state after this one
                 uartPtr->__rx_internal.state = BB_UART_RX_IDLE;
                 uartPtr->__rx_internal.bitSamples = RX_BITSAMPLES_RESET_VALUE;
@@ -328,6 +383,7 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
                 // in one-wire mode, unblock tx line again
                 if(uartPtr->mode == BB_UART_ONE_WIRE){
                     uartPtr->__tx_internal.state = BB_UART_TX_IDLE;
+                    txUnblockedHook(uartPtr);
                 }
             }
             else{
@@ -408,3 +464,14 @@ RC_t BB_UART_putc(BB_UART_t* uartPtr, char c){
     ring_buffer_put(uartPtr->tx_ringBuf, (uint8_t)c);
     return RC_SUCCESS;
 }
+
+__attribute__ ((weak)) void txFrameStartedHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void txFrameCompleteHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void txTransmissionCompleteHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void rxFrameStartDetectedHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void rxFrameCompleteHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void rxBlockedHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void rxUnblockedHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void txBlockedHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void txUnblockedHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void rxFrameErrorHook(BB_UART_t* uartPtr){}
