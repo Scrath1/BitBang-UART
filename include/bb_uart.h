@@ -227,29 +227,45 @@ RC_t BB_UART_putc(BB_UART_t* uartPtr, char c);
  * @brief Executes when a tx frame was created but before the first bit is
  *  transmitted.
  */
-void txFrameStartedHook(BB_UART_t* uartPtr);
+void BB_UART_txFrameStartedHook(BB_UART_t* uartPtr);
 /**
  * @brief Executes when a tx frame was fully sent
  */
-void txFrameCompleteHook(BB_UART_t* uartPtr);
+void BB_UART_txFrameCompleteHook(BB_UART_t* uartPtr);
 /**
  * @brief Executes when the tx buffer is empty after a transmission
  */
-void txTransmissionCompleteHook(BB_UART_t* uartPtr);
+void BB_UART_txTransmissionCompleteHook(BB_UART_t* uartPtr);
 /**
  * @brief Executes when a start bit was detected
  */
-void rxFrameStartDetectedHook(BB_UART_t* uartPtr);
+void BB_UART_rxFrameStartDetectedHook(BB_UART_t* uartPtr);
 /**
  * @brief Executes when a frame was fully received
  */
-void rxFrameCompleteHook(BB_UART_t* uartPtr);
-
-void rxBlockedHook(BB_UART_t* uartPtr);
-void rxUnblockedHook(BB_UART_t* uartPtr);
-void txBlockedHook(BB_UART_t* uartPtr);
-void txUnblockedHook(BB_UART_t* uartPtr);
-void rxFrameErrorHook(BB_UART_t* uartPtr);
+void BB_UART_rxFrameCompleteHook(BB_UART_t* uartPtr);
+/**
+ * @brief Executes when the rx line gets blocked in one-wire mode
+ */
+void BB_UART_rxBlockedHook(BB_UART_t* uartPtr);
+/**
+ * @brief Executes when rx line get unblocked in one-wire mode
+ */
+void BB_UART_rxUnblockedHook(BB_UART_t* uartPtr);
+/**
+ * @brief Executes tx line gets blocked in one-wire mode
+ */
+void BB_UART_txBlockedHook(BB_UART_t* uartPtr);
+/**
+ * @brief Executes when tx line get unblocked in one-wire mode
+ */
+void BB_UART_txUnblockedHook(BB_UART_t* uartPtr);
+/**
+ * @brief Executes when a frame error is detected.
+ *  This interrupt gives the opportunity to save the error register,
+ *  last received frame and other data.
+ */
+void BB_UART_rxFrameErrorHook(BB_UART_t* uartPtr);
 
 #ifdef __cplusplus
 }

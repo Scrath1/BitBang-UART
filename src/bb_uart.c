@@ -94,14 +94,14 @@ RC_t BB_UART_transmitBit(BB_UART_t* uartPtr){
                 // if in one wire-mode, block rx line while transmitting
                 if(uartPtr->mode == BB_UART_ONE_WIRE){
                     uartPtr->__rx_internal.state = BB_UART_RX_BLOCKED;
-                    rxBlockedHook(uartPtr);
+                    BB_UART_rxBlockedHook(uartPtr);
                 }
             }
             break;
         case BB_UART_TX_TRANSMITTING_FRAME:
             if(*remFrameBitPtr == BB_UART_calculateFrameSize(uartPtr)){
                 // execute once at beginning of frame transmission
-                txFrameStartedHook(uartPtr);
+                BB_UART_txFrameStartedHook(uartPtr);
             }
             if((*remFrameBitPtr) > 0){
                 // transmit next bit in frame and decrement remainingFrameBits
@@ -119,7 +119,7 @@ RC_t BB_UART_transmitBit(BB_UART_t* uartPtr){
         case BB_UART_TX_FRAME_TRANSMITTED:
             // must be executed here, otherwise the stop bit is not fully
             // included in the hook
-            txFrameCompleteHook(uartPtr);
+            BB_UART_txFrameCompleteHook(uartPtr);
             RC_t ret = BB_UART_createNextFrame(uartPtr);
             if(RC_ERROR_BUFFER_EMPTY == ret){
                 // transmission finished, no more data in tx buffer
@@ -135,11 +135,11 @@ RC_t BB_UART_transmitBit(BB_UART_t* uartPtr){
             if(uartPtr->mode == BB_UART_ONE_WIRE){
                 // if in one-wire mode, unblock the rx line
                 uartPtr->__rx_internal.state = BB_UART_RX_IDLE;
-                rxUnblockedHook(uartPtr);
+                BB_UART_rxUnblockedHook(uartPtr);
             }
             // return to idle state
             uartPtr->__tx_internal.state = BB_UART_TX_IDLE;
-            txTransmissionCompleteHook(uartPtr);
+            BB_UART_txTransmissionCompleteHook(uartPtr);
             break;
         case BB_UART_TX_BLOCKED:
             // do nothing
@@ -312,7 +312,7 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
                 if(uartPtr->mode == BB_UART_ONE_WIRE){
                     // in one wire mode, block tx while receiving data
                     uartPtr->__tx_internal.state = BB_UART_TX_BLOCKED;
-                    txBlockedHook(uartPtr);
+                    BB_UART_txBlockedHook(uartPtr);
                 }
             }
             break;
@@ -325,7 +325,7 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
                     uartPtr->__rx_internal.state = BB_UART_RX_IDLE;
                     if(uartPtr->mode == BB_UART_ONE_WIRE){
                          uartPtr->__tx_internal.state = BB_UART_TX_IDLE;
-                        txUnblockedHook(uartPtr);
+                        BB_UART_txUnblockedHook(uartPtr);
                     }
                 }
                 else{
@@ -334,7 +334,7 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
                     // Make sure framebuffer is empty and add startbit
                     *framePtr = averagedBit;
                     uartPtr->__rx_internal.receivedBitsCnt = 1;
-                    rxFrameStartDetectedHook(uartPtr);
+                    BB_UART_rxFrameStartDetectedHook(uartPtr);
                 }
             }
             break;
@@ -354,7 +354,7 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
                 RC_t ret = RC_SUCCESS;
                 if(RC_SUCCESS != BB_UART_extractData(uartPtr, &data)){
                     // frame was invalid
-                    rxFrameErrorHook(uartPtr);
+                    BB_UART_rxFrameErrorHook(uartPtr);
                     ret = RC_ERROR_INVALID;
                 }
                 else{
@@ -368,7 +368,7 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
                     // in one wire mode, block tx while receiving data
                     uartPtr->__rx_internal.cooldownCycles = COOLDOWN_CYCLES;
                 }
-                rxFrameCompleteHook(uartPtr);
+                BB_UART_rxFrameCompleteHook(uartPtr);
                 return ret;
             }
             break;
@@ -383,7 +383,7 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
                 // in one-wire mode, unblock tx line again
                 if(uartPtr->mode == BB_UART_ONE_WIRE){
                     uartPtr->__tx_internal.state = BB_UART_TX_IDLE;
-                    txUnblockedHook(uartPtr);
+                    BB_UART_txUnblockedHook(uartPtr);
                 }
             }
             else{
@@ -465,13 +465,13 @@ RC_t BB_UART_putc(BB_UART_t* uartPtr, char c){
     return RC_SUCCESS;
 }
 
-__attribute__ ((weak)) void txFrameStartedHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void txFrameCompleteHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void txTransmissionCompleteHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void rxFrameStartDetectedHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void rxFrameCompleteHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void rxBlockedHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void rxUnblockedHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void txBlockedHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void txUnblockedHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void rxFrameErrorHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void BB_UART_txFrameStartedHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void BB_UART_txFrameCompleteHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void BB_UART_txTransmissionCompleteHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void BB_UART_rxFrameStartDetectedHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void BB_UART_rxFrameCompleteHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void BB_UART_rxBlockedHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void BB_UART_rxUnblockedHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void BB_UART_txBlockedHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void BB_UART_txUnblockedHook(BB_UART_t* uartPtr){}
+__attribute__ ((weak)) void BB_UART_rxFrameErrorHook(BB_UART_t* uartPtr){}
