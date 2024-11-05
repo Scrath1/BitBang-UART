@@ -3,6 +3,10 @@
 
 #define START_BIT_LEVEL (0)
 #define STOP_BIT_LEVEL (1)
+#define COOLDOWN_CYCLES (5)
+// Since the idle state of a UART line is high, the bitsample reset value
+// should be all 1s
+#define RX_BITSAMPLES_RESET_VALUE (0xFF)
 
 /**
  * @brief Calculates the number of bits in a single UART frame based on
@@ -81,18 +85,47 @@ RC_t BB_UART_createNextFrame(BB_UART_t* uartPtr){
  */
 RC_t BB_UART_transmitBit(BB_UART_t* uartPtr){
     if(uartPtr == NULL) return RC_ERROR_NULL;
-    if(uartPtr->__tx_internal.remainingFrameBits == 0){
-        if(RC_SUCCESS != BB_UART_createNextFrame(uartPtr))
-        {
-            return RC_ERROR_BUFFER_EMPTY;
-        }
+    switch(uartPtr->__tx_internal.state){
+        case BB_UART_TX_IDLE:
+            if(ring_buffer_avail(uartPtr->tx_ringBuf) > 0){
+                uartPtr->__tx_internal.state = BB_UART_TX_TRANSMITTING_FRAME;
+                // if in one wire-mode, block rx line while transmitting
+                if(uartPtr->mode == BB_UART_ONE_WIRE){
+                    uartPtr->__rx_internal.state = BB_UART_RX_BLOCKED;
+                }
+            }
+            break;
+        case BB_UART_TX_TRANSMITTING_FRAME:
+            if(RC_ERROR_BUFFER_EMPTY == BB_UART_createNextFrame(uartPtr)){
+                // no more data to transmit
+                uartPtr->__tx_internal.state = BB_UART_TX_BUFFER_TRANSMITTED;
+            }
+            if(uartPtr->__tx_internal.remainingFrameBits > 0){
+                // transmit next bit in frame and decrement remainingFrameBits
+                uint8_t b = uartPtr->__tx_internal.frame & 0b1; // get next bit
+                uartPtr->__tx_internal.frame >>= 1; // shift bit out of queue
+                uartPtr->__tx_internal.remainingFrameBits--;
+                if(uartPtr->writePinFunc != NULL){
+                    uartPtr->writePinFunc(b);
+                }
+            }
+            break;
+        case BB_UART_TX_BUFFER_TRANSMITTED:
+            // ToDo: Potentially add a callback function here
+            if(uartPtr->mode == BB_UART_ONE_WIRE){
+                // if in one-wire mode, unblock the rx line
+                uartPtr->__rx_internal.state = BB_UART_RX_IDLE;
+            }
+            // return to idle state
+            uartPtr->__tx_internal.state = BB_UART_TX_IDLE;
+            break;
+        case BB_UART_TX_BLOCKED:
+            // do nothing
+            break;
+        default:
+            // should never happen
+            return RC_ERROR_INVALID_STATE;
     }
-
-    uint8_t b = uartPtr->__tx_internal.frame & 0b1; // get next bit
-    uartPtr->__tx_internal.frame >>= 1; // shift bit out of queue
-    uartPtr->__tx_internal.remainingFrameBits--;
-    if(uartPtr->writePinFunc != NULL)
-        uartPtr->writePinFunc(b);
     return RC_SUCCESS;
 }
 
@@ -113,11 +146,13 @@ RC_t BB_UART_validateConfig(BB_UART_t* uartPtr){
     // initialize internal data
     uartPtr->__tx_internal.frame = 0;
     uartPtr->__tx_internal.remainingFrameBits = 0;
-    uartPtr->__rx_internal.frame = 0xFF; // idle line is high
-    uartPtr->__rx_internal.bitSamples = 0;
+    uartPtr->__tx_internal.state = BB_UART_TX_IDLE;
+    uartPtr->__rx_internal.frame = RX_BITSAMPLES_RESET_VALUE; // idle line is high
+    uartPtr->__rx_internal.bitSamples = RX_BITSAMPLES_RESET_VALUE;
     uartPtr->__rx_internal.overSampleCounter = 0;
     uartPtr->__rx_internal.state = BB_UART_RX_IDLE;
     uartPtr->__rx_internal.receivedBitsCnt = 0;
+    uartPtr->__rx_internal.cooldownCycles = 0;
     return RC_SUCCESS;
 }
 
@@ -250,6 +285,10 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
                 // Make sure framebuffer is empty and add startbit
                 *framePtr = receivedBit;
                 uartPtr->__rx_internal.receivedBitsCnt = 1;
+                if(uartPtr->mode == BB_UART_ONE_WIRE){
+                    // in one wire mode, block tx while receiving data
+                    uartPtr->__tx_internal.state = BB_UART_TX_BLOCKED;
+                }
             }
             break;
         case BB_UART_RX_RECEIVING_FRAME:
@@ -259,7 +298,7 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
             // if the number of received bits matches the frame size
             // return to idle state and listen for next start bit
             if(uartPtr->__rx_internal.receivedBitsCnt >= frameSize){
-                uartPtr->__rx_internal.state = BB_UART_RX_IDLE;
+                uartPtr->__rx_internal.state = BB_UART_RX_FRAME_RECEIVED;
                 // check if frame is valid and extract the data
                 uint16_t data = 0;
                 if(RC_SUCCESS != BB_UART_extractData(uartPtr, &data)){
@@ -273,6 +312,26 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
                         return RC_ERROR_BUFFER_FULL;
                     }
                 }
+                if(uartPtr->mode == BB_UART_ONE_WIRE){
+                    // in one wire mode, block tx while receiving data
+                    uartPtr->__rx_internal.cooldownCycles = COOLDOWN_CYCLES;
+                }
+            }
+            break;
+        case BB_UART_RX_FRAME_RECEIVED:
+            if(uartPtr->__rx_internal.cooldownCycles == 0){
+                // revert to idle state after this one
+                uartPtr->__rx_internal.state = BB_UART_RX_IDLE;
+                uartPtr->__rx_internal.bitSamples = RX_BITSAMPLES_RESET_VALUE;
+                uartPtr->__rx_internal.frame = RX_BITSAMPLES_RESET_VALUE;
+                uartPtr->__rx_internal.receivedBitsCnt = 0;
+                // in one-wire mode, unblock tx line again
+                if(uartPtr->mode == BB_UART_ONE_WIRE){
+                    uartPtr->__tx_internal.state = BB_UART_TX_IDLE;
+                }
+            }
+            else{
+                uartPtr->__rx_internal.cooldownCycles--;
             }
             break;
         default:
@@ -290,25 +349,29 @@ RC_t BB_UART_service(BB_UART_t* uartPtr){
     switch(uartPtr->mode){
         case BB_UART_TX_ONLY:
             // transmit the next bit in the tx frame
-            BB_UART_transmitBit(uartPtr);
+            (void)BB_UART_transmitBit(uartPtr);
             break;
         case BB_UART_RX_ONLY:
             // Sample the UART.
-            BB_UART_receiveBit(uartPtr);
+            err = BB_UART_receiveBit(uartPtr);
             break;
         case BB_UART_ONE_WIRE:
-            // Determine whether the rx line is idle
-            if(uartPtr->__rx_internal.state == BB_UART_RX_IDLE){
+            // in one wire mode, rx can only occur if tx is idle or blocked
+            // and the other way around. Whichever line changes first from
+            // idle to transmit will set the other one to blocked.
+            if(uartPtr->__tx_internal.state == BB_UART_TX_IDLE
+                || uartPtr->__tx_internal.state == BB_UART_TX_BLOCKED){
+                err = BB_UART_receiveBit(uartPtr);
+            }
+            // Determine whether the rx line is idle or blocked
+            if(uartPtr->__rx_internal.state == BB_UART_RX_IDLE
+                || uartPtr->__rx_internal.state == BB_UART_RX_BLOCKED){
                 // determine whether it is time to transmit the next bit
                 // depending on oversampling setting
                 if(*overSampleCounter == 0){
                     // rx is idle and it is time to transmit a new bit
                     (void)BB_UART_transmitBit(uartPtr);
                 }
-            }
-            else{
-                // Rx line is receiving data
-                err = BB_UART_receiveBit(uartPtr);
             }
             break;
         case BB_UART_RX_TX:
