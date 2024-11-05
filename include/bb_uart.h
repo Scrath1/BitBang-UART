@@ -224,6 +224,30 @@ RC_t BB_UART_put(BB_UART_t* uartPtr, const uint8_t* data, uint32_t dataLen);
 RC_t BB_UART_putc(BB_UART_t* uartPtr, char c);
 
 /**
+ * @brief Read up to len bytes from the rx buffer. If not enough data is
+ *  available, return after reading all available data.
+ * @param uartPtr [IN] pointer to uart struct
+ * @param data [OUT] data array with a minimum size of len
+ * @param len [IN] Maximum number of bytes to read from buffer
+ * @return 0 if no data was read
+ * @return positive numbers represent the amount of bytes saved in data
+ * @return negative numbers are error codes. See datatype RC_t
+ */
+int32_t BB_UART_get(BB_UART_t* uartPtr, uint8_t* data, uint16_t len);
+
+/**
+ * @brief Read up to len bytes from the rx buffer. If not enough data is
+ *  available, wait until the specified amount of bytes was read.
+ * @param uartPtr [IN] pointer to uart struct
+ * @param data [OUT] data array with a minimum size of len
+ * @param len [IN] Maximum number of bytes to read from buffer
+ * @return 0 if no data was read
+ * @return positive numbers represent the amount of bytes saved in data
+ * @return negative numbers are error codes. See datatype RC_t
+ */
+int32_t BB_UART_getBlocking(BB_UART_t* uartPtr, uint8_t* data, uint16_t len);
+
+/**
  * @brief Executes when a tx frame was created but before the first bit is
  *  transmitted.
  */

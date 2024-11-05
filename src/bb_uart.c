@@ -3,7 +3,6 @@
 
 #define START_BIT_LEVEL (0)
 #define STOP_BIT_LEVEL (1)
-#define COOLDOWN_CYCLES (5)
 // Since the idle state of a UART line is high, the bitsample reset value
 // should be all 1s
 #define RX_BITSAMPLES_RESET_VALUE (0xFF)
@@ -365,8 +364,9 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
                     }
                 }
                 if(uartPtr->mode == BB_UART_ONE_WIRE){
-                    // in one wire mode, block tx while receiving data
-                    uartPtr->__rx_internal.cooldownCycles = COOLDOWN_CYCLES;
+                    // in one wire mode, block tx for at least 2 bit cycles
+                    // after receiving data to see if there is more being sent
+                    uartPtr->__rx_internal.cooldownCycles = (uartPtr->oversampling * 2) + 1;
                 }
                 BB_UART_rxFrameCompleteHook(uartPtr);
                 return ret;
@@ -463,6 +463,38 @@ RC_t BB_UART_putc(BB_UART_t* uartPtr, char c){
 
     ring_buffer_put(uartPtr->tx_ringBuf, (uint8_t)c);
     return RC_SUCCESS;
+}
+
+int32_t BB_UART_get(BB_UART_t* uartPtr, uint8_t* data, uint16_t len){
+    if(uartPtr == NULL) return RC_ERROR_NULL;
+    if(data == NULL) return RC_ERROR_NULL;
+
+    uint32_t numBytesRead = 0;
+    for(numBytesRead = 0; numBytesRead < len; numBytesRead++){
+        uint8_t b = 0;
+        if(RC_SUCCESS == ring_buffer_get(uartPtr->rx_ringBuf, &b)){
+            data[numBytesRead] = b;
+        }
+        else{
+            break;
+        }
+    }
+    return numBytesRead;
+}
+
+int32_t BB_UART_getBlocking(BB_UART_t* uartPtr, uint8_t* data, uint16_t len){
+    if(uartPtr == NULL) return RC_ERROR_NULL;
+    if(data == NULL) return RC_ERROR_NULL;
+
+    uint32_t numBytesRead = 0;
+    while(numBytesRead < len){
+        uint8_t b = 0;
+        if(RC_SUCCESS == ring_buffer_get(uartPtr->rx_ringBuf, &b)){
+            data[numBytesRead] = b;
+            numBytesRead++;
+        }
+    }
+    return numBytesRead;
 }
 
 __attribute__ ((weak)) void BB_UART_txFrameStartedHook(BB_UART_t* uartPtr){}
