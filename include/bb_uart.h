@@ -60,15 +60,41 @@ typedef enum{
 } BB_UART_Wordlength_t;
 
 typedef enum{
-    BB_UART_TX_ONLY, // UART is only capable of sending data
-    BB_UART_RX_ONLY, // UART is only capable of receiving data
-    BB_UART_ONE_WIRE, // UART can send and receive data over one wire, but not at the same time. Requires an open-drain pinmode.
-    BB_UART_RX_TX, // UART has separate RX and TX wires
+    // UART is only capable of sending data
+    BB_UART_TX_ONLY,
+    // UART is only capable of receiving data
+    BB_UART_RX_ONLY,
+    // UART can send and receive data over one wire, but not at the same time.
+    // Requires an open-drain pinmode. Functionality of this mode
+    // is unverified
+    BB_UART_ONE_WIRE,
+    // UART has separate RX and TX wires
+    // and can send and receive simultaneously
+    BB_UART_RX_TX,
 } BB_UART_Mode_t;
 
 typedef enum{
-    BB_UART_RX_IDLE, // Waiting for detection of start bit
-    BB_UART_RX_RECEIVING_FRAME // Currently in the process of receiving a uart frame
+    // Waiting for data to transmit
+    BB_UART_TX_IDLE,
+    // Currently in the process of transmitting a uart frame
+    BB_UART_TX_TRANSMITTING_FRAME,
+    // All contents of tx buffer have been transmitted
+    BB_UART_TX_BUFFER_TRANSMITTED,
+    // Tx line is blocked, e.g. because UART is in one-wire mode and is
+    // currently receiving data
+    BB_UART_TX_BLOCKED
+} BB_UART_Tx_Line_State_t;
+
+typedef enum{
+    // Waiting for detection of start bit
+    BB_UART_RX_IDLE,
+    // Currently in the process of receiving a uart frame
+    BB_UART_RX_RECEIVING_FRAME,
+    // a frame was fully received. UART is preparing for next frame reception
+    BB_UART_RX_FRAME_RECEIVED,
+    // Rx line is blocked, e.g. because UART is in one-wire mode and is
+    // currently transmitting
+    BB_UART_RX_BLOCKED
 } BB_UART_Rx_Line_State_t;
 
 typedef enum{
@@ -106,6 +132,8 @@ typedef struct{
         uint16_t frame;
         // Remaining bits of current frame before next frame is created
         uint8_t remainingFrameBits;
+        // Current state of Tx line
+        BB_UART_Tx_Line_State_t state;
     } __tx_internal;
     // Contains library internal variables for receiving data
     struct{
@@ -117,11 +145,11 @@ typedef struct{
         uint16_t frame;
         // Contains the bits sampled to determine the next frame bit
         uint16_t bitSamples;
-        // Counts how often the timerCallback has been called.
+        // Counts how often the the service function has been called.
         // Maximum value is oversampling-1.
         // Whenever this variable is equal to 0, a new rx bit is determined based
         // on the rx bit samples and a tx bit can be transmitted. This variable
-        // is incremented in the timerCallback.
+        // is incremented in the service function.
         uint8_t overSampleCounter;
         // Current state of Rx line
         BB_UART_Rx_Line_State_t state;
@@ -129,6 +157,11 @@ typedef struct{
         // a single frame. This value is reset when a start bit from a new
         // frame is detected.
         uint8_t receivedBitsCnt;
+        // If in one wire mode, this variable represents the number of bit
+        // cycles to wait after a full frame reception before reenabling the tx
+        // line. If the uart is not in one-wire mode, this variable should always
+        // be 0.
+        uint8_t cooldownCycles;
     } __rx_internal;
 } BB_UART_t;
 
