@@ -73,6 +73,35 @@ For specific examples, look to the `examples` folder. Examples prefixed with
    initialization and start the timer interrupt you configured in the previous
    step.
 
+## Hook functions
+This library has a number of hook functions you can overwrite which are triggered
+automatically based on events during sending or receiving data.
+While the original purpose of these functions is to aid in debugging the library,
+they can also be used to handle UART events.
+
+Examples:
+- `BB_UART_rxFrameCompleteHook()` is called whenever reception of an Rx frame
+  has been completed. At the point where it is called, the received byte has been
+  added to the internal ringbuffer so this function can be used as an `onReceive`
+  callback. It is called irrespectively of any errors during the reception process
+  so the presence of data is not guaranteed.
+- `BB_UART_rxFrameErrorHook()` is called when an error with the received Rx frame
+  was detected, e.g. the start or stop bits don't line up or the parity doesn't
+  match the configuration. During this function you can take a snapshot of the
+  `__rx_internal.error` register which saves the specific errors that occurred
+  using single bits as flags. These can be compared against the errors
+  defined in `BB_UART_Rx_Frame_Error_t` to troubleshoot.
+
+For a full list of available hook functions, refer to the `bb_uart.h` file.
+
+## USART?
+This is not something I have actually tested but theoretically you should be
+able to use this library for USART as well by doing the following:
+1. Set oversampling to `BB_UART_OVERSAMPLE_1`.
+2. Instead of a timer, use a GPIO interrupt to trigger the `BB_UART_service()`
+   function.
+3. Apply an external clock to the GPIO pin you configured for the interrupt.
+
 ## Found a Bug?
 Feel free to open an issue.
 
