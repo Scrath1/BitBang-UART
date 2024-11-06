@@ -163,6 +163,9 @@ RC_t BB_UART_validateConfig(BB_UART_t* uartPtr){
         if(uartPtr->readPinFunc == NULL) return RC_ERROR_BAD_PARAM;
         if(uartPtr->rx_ringBuf == NULL) return RC_ERROR_BAD_PARAM;
     }
+    // init ringbuffers
+    if(uartPtr->rx_ringBuf != NULL) ring_buffer_init(uartPtr->rx_ringBuf);
+    if(uartPtr->tx_ringBuf != NULL) ring_buffer_init(uartPtr->tx_ringBuf);
 
     // initialize internal data
     uartPtr->__tx_internal.frame = 0;
@@ -367,7 +370,9 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
                     // frame was valid and data was extracted
                     // moving data to ringbuffer
                     if(RC_SUCCESS != ring_buffer_put(uartPtr->rx_ringBuf, (uint8_t) data)){
-                        ret = RC_ERROR_BUFFER_FULL;
+                        // shouldn't be possible unless ring_buffer API changed
+                        // to have more than RC_SUCCESS as possible return here
+                        ret = RC_ERROR_UNKNOWN;
                     }
                 }
                 if(uartPtr->mode == BB_UART_ONE_WIRE){
