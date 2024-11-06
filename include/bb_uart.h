@@ -57,8 +57,7 @@ typedef enum{
     // UART is only capable of receiving data
     BB_UART_RX_ONLY,
     // UART can send and receive data over one wire, but not at the same time.
-    // Requires an open-drain pinmode. Functionality of this mode
-    // is unverified
+    // Requires an open-drain pinmode.
     BB_UART_ONE_WIRE,
     // UART has separate RX and TX wires
     // and can send and receive simultaneously
