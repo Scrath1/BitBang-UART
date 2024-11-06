@@ -1,6 +1,11 @@
 name: Library CI
-on:
-  - push
+'on':
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -11,15 +16,20 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.platformio/.cache
-          key: ${{ runner.os }}-pio
+          key: '${{ runner.os }}-pio'
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
       - name: Install PlatformIO Core
         run: pip install --upgrade platformio
+      - name: Run googletest based on native environment
+        run: >-
+          pio test -e native
       - name: Build Arduino framework-based examples
-        run: pio ci examples/arduino*.* -l . --project-conf=platformio.ini
+        run: >-
+          pio ci examples/arduino*.* -l . --project-conf=platformio.ini
           --environment=seeed_xiao_esp32c3_arduino
       - name: Build ESP-IDF framework-based examples
-        run: pio ci examples/esp-idf*.* -l . --project-conf=platformio.ini
+        run: >-
+          pio ci examples/esp-idf*.* -l . --project-conf=platformio.ini
           --environment=seeed_xiao_esp32c3_esp-idf
