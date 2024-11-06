@@ -1,0 +1,20 @@
+{
+    "$schema": "https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/schema/library.json",
+    "name": "BitBang-UART",
+    "version": "1.0.0",
+    "description": "A library for bitbanging UART receive and transmit functionality using timer interrupts",
+    "keywords": "UART, Bit banging, Interrupt, Rx, Tx",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Scrath1/BitBang-UART.git"
+    },
+    "authors": [
+        {
+            "name": "Tobias Stein",
+            "email": "tobiasstein1@gmx.net"
+        }
+    ],
+    "license": "MIT",
+    "frameworks": "*",
+    "platforms": "*"
+}
