@@ -270,6 +270,19 @@ RC_t BB_UART_extractData(BB_UART_t* uartPtr, uint16_t* dataOut){
     *dataOut = data;
     return ret;
 }
+
+void BB_UART_switchToRxAligningState(BB_UART_t* uartPtr){
+    if(uartPtr == NULL) return;
+    
+    uartPtr->__rx_internal.overSampleCounter = 0;
+    uartPtr->__rx_internal.state = BB_UART_RX_ALIGNING;
+    if(uartPtr->mode == BB_UART_ONE_WIRE){
+        // in one wire mode, block tx while receiving data
+        uartPtr->__tx_internal.state = BB_UART_TX_BLOCKED;
+        BB_UART_txBlockedHook(uartPtr);
+    }
+}
+
 /**
  * @brief Samples UART line to detect transmitted bits
  * @param uartPtr [IN] pointer to uart struct
@@ -306,13 +319,7 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
         case BB_UART_RX_IDLE:
             if(b == START_BIT_LEVEL){
                 // possible start of frame detected
-                uartPtr->__rx_internal.overSampleCounter = 0;
-                uartPtr->__rx_internal.state = BB_UART_RX_ALIGNING;
-                if(uartPtr->mode == BB_UART_ONE_WIRE){
-                    // in one wire mode, block tx while receiving data
-                    uartPtr->__tx_internal.state = BB_UART_TX_BLOCKED;
-                    BB_UART_txBlockedHook(uartPtr);
-                }
+                BB_UART_switchToRxAligningState(uartPtr);
             }
             break;
         case BB_UART_RX_ALIGNING:
@@ -373,7 +380,11 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
             }
             break;
         case BB_UART_RX_FRAME_RECEIVED:
-            if(uartPtr->__rx_internal.cooldownCycles == 0){
+            if(b == START_BIT_LEVEL){
+                // possible start to next frame detected
+                BB_UART_switchToRxAligningState(uartPtr);
+            }
+            else if(uartPtr->__rx_internal.cooldownCycles == 0){
                 // execute rx frame complete hook
                 // revert to idle state after this one
                 uartPtr->__rx_internal.state = BB_UART_RX_IDLE;
