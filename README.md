@@ -1,3 +1,4 @@
+[![Library CI](https://github.com/Scrath1/BitBang-UART/actions/workflows/githubci.yml/badge.svg)](https://github.com/Scrath1/BitBang-UART/actions/workflows/githubci.yml)
 # BitBang-UART
 Timer-interrupt-based hardware independent bitbang UART driver library with
 support for receiving and transmitting data.
