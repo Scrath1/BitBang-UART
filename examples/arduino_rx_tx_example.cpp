@@ -1,7 +1,3 @@
-/**
- * Example created on 2024-11-04
- * using a Seeed Studio XIAO ESP32C3.
- */
 #include <Arduino.h>
 #include <bb_uart.h>
 
@@ -11,6 +7,20 @@
  * Library source: https://github.com/PaulStoffregen/TimerOne
  */
 #include <TimerOne.h>
+
+
+/**
+ * Example description:
+ * ============================================================================
+ * This example demonstrates the usage of the Bitbang-UART library for
+ * transmitting and receiving over a separate rx and tx pin in full-duplex.
+ * 
+ * The microcontroller will continuously send '.' over the UART while also
+ * echoing back any data the user sends it.
+ * 
+ * This example was written using a Seeed Studio XIAO ESP32C3 but can be
+ * easily adjusted for any other sufficiently fast microcontroller.
+ */
 
 /**
  * For the UART to function a timer interrupt is necessary,
