@@ -102,7 +102,13 @@ RC_t BB_UART_transmitBit(BB_UART_t* uartPtr){
                     BB_UART_rxBlockedHook(uartPtr);
                 }
             }
-            break;
+            else{
+                // !!!!!!!!!!
+                // If frame creation is successful, fall through to next
+                // case so as to not waste a transmission cycle.
+                // else break the switch case here
+                break;
+            }
         case BB_UART_TX_TRANSMITTING_FRAME:
             if(*remFrameBitPtr == BB_UART_calculateFrameSize(uartPtr)){
                 // execute once at beginning of frame transmission
