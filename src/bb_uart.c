@@ -7,6 +7,12 @@
 // should be all 1s
 #define RX_BITSAMPLES_RESET_VALUE (0xFF)
 
+// Default UART settings
+#define DEFAULT_UART_MODE BB_UART_TX_ONLY
+#define DEFAULT_WORDLENGTH BB_UART_WORDLENGTH_8
+#define DEFAULT_STOPBITS BB_UART_STOPBITS_1
+#define DEFAULT_OVERSAMPLING BB_UART_OVERSAMPLE_1
+
 /**
  * @brief Calculates the number of bits in a single UART frame based on
  *  the current configuration. This includes the start bit, data bits,
@@ -167,6 +173,12 @@ RC_t BB_UART_validateConfig(BB_UART_t* uartPtr){
     if(uartPtr->rx_ringBuf != NULL) ring_buffer_init(uartPtr->rx_ringBuf);
     if(uartPtr->tx_ringBuf != NULL) ring_buffer_init(uartPtr->tx_ringBuf);
 
+    // ensure defaults if not configured otherwise
+    if(uartPtr->wordLen == 0) uartPtr->wordLen = DEFAULT_WORDLENGTH;
+    if(uartPtr->stopBits == 0) uartPtr->stopBits = DEFAULT_STOPBITS;
+    if(uartPtr->mode == BB_UART_UNITIALIZED) uartPtr->mode = DEFAULT_UART_MODE;
+    if(uartPtr->oversampling == 0) uartPtr->oversampling = DEFAULT_OVERSAMPLING;
+
     // initialize internal data
     uartPtr->__tx_internal.frame = 0;
     uartPtr->__tx_internal.remainingFrameBits = 0;
@@ -185,7 +197,7 @@ RC_t BB_UART_validateConfig(BB_UART_t* uartPtr){
  * @brief Counts the number of set bits in the variable,
  *  starting from the lsb. At most bitsToEval are evaluated.
  */
-uint32_t numOfSetBits(uint32_t var, uint32_t bitsToEval){
+uint32_t BB_UART_numOfSetBits(uint32_t var, uint32_t bitsToEval){
     if(bitsToEval > (sizeof(var)*8)){
         bitsToEval = sizeof(var)*8;
     }
@@ -309,7 +321,7 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
     *bitSamples = ((*bitSamples) << 1) | b;
     // average of the last couple of sampled bits
     uint8_t averagedBit = 0;
-    uint8_t highSamples = numOfSetBits(*bitSamples, (uint32_t)uartPtr->oversampling);
+    uint8_t highSamples = BB_UART_numOfSetBits(*bitSamples, (uint32_t)uartPtr->oversampling);
     // more than half of the samples need to be high for the final
     // bit to be high
     const uint8_t thresh = (uartPtr->oversampling/2)+1;

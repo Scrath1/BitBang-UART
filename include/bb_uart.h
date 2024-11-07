@@ -52,6 +52,9 @@ typedef enum{
 } BB_UART_Wordlength_t;
 
 typedef enum{
+    // User hasn't set a mode. Config validation will change the mode
+    // to the default specified by DEFAULT_UART_MODE.
+    BB_UART_UNITIALIZED,
     // UART is only capable of sending data
     BB_UART_TX_ONLY,
     // UART is only capable of receiving data
