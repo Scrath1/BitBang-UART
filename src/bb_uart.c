@@ -91,7 +91,16 @@ RC_t BB_UART_createNextFrame(BB_UART_t* uartPtr){
 RC_t BB_UART_transmitBit(BB_UART_t* uartPtr){
     if(uartPtr == NULL) return RC_ERROR_NULL;
     uint8_t* remFrameBitPtr = &(uartPtr->__tx_internal.remainingFrameBits);
-    switch(uartPtr->__tx_internal.state){
+
+    // Flag which can be set to repeat the statemachine execution.
+    // Can be used to immediately continue execution of a new state after
+    // a state change without waiting for the next bit cycle to execute
+    // this function again
+    bool repeat = false;
+    do{
+        // reset flag if it was set in during last loop iteration
+        repeat = false;
+        switch(uartPtr->__tx_internal.state){
         case BB_UART_TX_IDLE:
             // returns RC_ERROR_BUFFER_EMPTY if there is no data to transmit
             if(RC_SUCCESS == BB_UART_createNextFrame(uartPtr)){
@@ -101,14 +110,11 @@ RC_t BB_UART_transmitBit(BB_UART_t* uartPtr){
                     uartPtr->__rx_internal.state = BB_UART_RX_BLOCKED;
                     BB_UART_rxBlockedHook(uartPtr);
                 }
+                // immediately start with transmitting the first bit
+                // to prevent wasting a bit cycle
+                repeat = true;
             }
-            else{
-                // !!!!!!!!!!
-                // If frame creation is successful, fall through to next
-                // case so as to not waste a transmission cycle.
-                // else break the switch case here
-                break;
-            }
+            break;
         case BB_UART_TX_TRANSMITTING_FRAME:
             if(*remFrameBitPtr == BB_UART_calculateFrameSize(uartPtr)){
                 // execute once at beginning of frame transmission
@@ -140,6 +146,8 @@ RC_t BB_UART_transmitBit(BB_UART_t* uartPtr){
                 // There was more data in the tx buffer.
                 // Send next frame
                 uartPtr->__tx_internal.state = BB_UART_TX_TRANSMITTING_FRAME;
+                // immediately start transmitting next bit
+                repeat = true;
             }
             break;
         case BB_UART_TX_BUFFER_TRANSMITTED:
@@ -159,6 +167,7 @@ RC_t BB_UART_transmitBit(BB_UART_t* uartPtr){
             // should never happen
             return RC_ERROR_INVALID_STATE;
     }
+    } while(repeat);
     return RC_SUCCESS;
 }
 
