@@ -7,23 +7,6 @@ extern "C" {
 #endif
 
 /**
- * How to use:
- * 1. Declare a ringbuffer to use by the bitbang uart using the
- *  RING_BUFFER_DEF macro.
- * 2. Declare a function of the format "void func(uint8_t)". This function
- *  should set the GPIO pin used for transmission by this UART high or low
- *  depending on parameter state.
- * 3. Declare a BB_UART_t struct and assign all variables that are not
- *  prefixed with a double underscore. The tx_ringBuf pointer should point
- *  at the ringbuffer from step one. The function declared in step 2
- *  should be assigned to the writePinFunc variable.
- * 4. Start a timer which calls the BB_UART_transmitBit function in the interval
- *  required by the desired baud rate. For 9600 baud this function should be called
- *  every 104.167us.
- * 5. Transmit using the put and putc functions.
- */
-
-/**
  * Timer counter period value calculation
  * (1/(baud*oversampling)) * timer clock freq = counter reload val
  */
@@ -249,6 +232,18 @@ int32_t BB_UART_get(BB_UART_t* uartPtr, uint8_t* data, uint16_t len);
  */
 int32_t BB_UART_getBlocking(BB_UART_t* uartPtr, uint8_t* data, uint16_t len);
 
+/**
+ * @brief Returns the number of bytes ready in the Rx buffer.
+ * @param uartPtr [IN] pointer to uart struct
+ * @return number of bytes available in the rx buffer which can be read
+ *  by the user
+ */
+uint32_t BB_UART_GetNumAvailableBytes(BB_UART_t* const uartPtr);
+
+/**
+ * @brief Clears any data left in the rx buffer
+ */
+void BB_UART_clearRxBuffer(BB_UART_t* const uartPtr);
 /**
  * @brief Executes when a tx frame was created but before the first bit is
  *  transmitted.

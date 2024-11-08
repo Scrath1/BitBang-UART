@@ -531,6 +531,16 @@ int32_t BB_UART_getBlocking(BB_UART_t* uartPtr, uint8_t* data, uint16_t len){
     return numBytesRead;
 }
 
+uint32_t BB_UART_GetNumAvailableBytes(BB_UART_t* const uartPtr){
+    if(uartPtr == NULL) return 0;
+    return ring_buffer_avail(uartPtr->rx_ringBuf);
+}
+
+void BB_UART_clearRxBuffer(BB_UART_t* const uartPtr){
+    if(uartPtr == NULL) return;
+    ring_buffer_init(uartPtr->rx_ringBuf);
+}
+
 __attribute__ ((weak)) void BB_UART_txFrameStartedHook(BB_UART_t* uartPtr){}
 __attribute__ ((weak)) void BB_UART_txFrameCompleteHook(BB_UART_t* uartPtr){}
 __attribute__ ((weak)) void BB_UART_txTransmissionCompleteHook(BB_UART_t* uartPtr){}
