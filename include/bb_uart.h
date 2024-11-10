@@ -18,23 +18,23 @@ extern "C" {
 
 // UART settings
 // ============================================
-typedef enum{
-    BB_UART_PARITY_NONE = 0,
-    BB_UART_PARITY_EVEN = 1,
-    BB_UART_PARITY_ODD = 2
+typedef enum {
+    BB_UART_PARITY_NONE = 0,  // No parity bit is used
+    BB_UART_PARITY_EVEN = 1,  // Even parity is used
+    BB_UART_PARITY_ODD = 2    // Odd parity is used
 } BB_UART_Parity_t;
 
-typedef enum{
+typedef enum {
     BB_UART_STOPBITS_1 = 1,
     BB_UART_STOPBITS_2 = 2,
 } BB_UART_Stopbits_t;
 
-typedef enum{
-    BB_UART_WORDLENGTH_7 = 7,
-    BB_UART_WORDLENGTH_8 = 8
+typedef enum {
+    BB_UART_WORDLENGTH_7 = 7,  // Each frame contains 7 data bits
+    BB_UART_WORDLENGTH_8 = 8   // Each frame contains 8 data bits
 } BB_UART_Wordlength_t;
 
-typedef enum{
+typedef enum {
     // User hasn't set a mode. Config validation will change the mode
     // to the default specified by DEFAULT_UART_MODE.
     BB_UART_UNITIALIZED,
@@ -50,7 +50,7 @@ typedef enum{
     BB_UART_RX_TX,
 } BB_UART_Mode_t;
 
-typedef enum{
+typedef enum {
     // Waiting for data to transmit
     BB_UART_TX_IDLE,
     // Currently in the process of transmitting a uart frame
@@ -64,7 +64,7 @@ typedef enum{
     BB_UART_TX_BLOCKED
 } BB_UART_Tx_Line_State_t;
 
-typedef enum{
+typedef enum {
     // Waiting for detection of start bit
     BB_UART_RX_IDLE,
     // Rx line is trying to align its sampling based on the start bit
@@ -83,17 +83,17 @@ typedef enum{
  * the average bit value during the reception time of a single bit.
  * For a bit to be detected as low, a majority of oversampling/2+1 must be present.
  */
-typedef enum{
-    BB_UART_OVERSAMPLE_1 = 1, // No oversampling at all. Only recommended for Tx only mode
-    BB_UART_OVERSAMPLE_3 = 3, // 3 bit samples are taken per rx bit
+typedef enum {
+    BB_UART_OVERSAMPLE_1 = 1,  // No oversampling at all. Only recommended for Tx only mode
+    BB_UART_OVERSAMPLE_3 = 3,  // 3 bit samples are taken per rx bit
     BB_UART_OVERSAMPLE_4 = 4,
-    BB_UART_OVERSAMPLE_5 = 5, // 5 bit samples are taken per rx bit
+    BB_UART_OVERSAMPLE_5 = 5,  // 5 bit samples are taken per rx bit
     BB_UART_OVERSAMPLE_6 = 6,
     BB_UART_OVERSAMPLE_7 = 7,
     BB_UART_OVERSAMPLE_8 = 8
 } BB_UART_Oversampling_t;
 
-typedef enum{
+typedef enum {
     // No error detected
     BB_UART_RX_ERROR_NONE = 0b0,
     // parity in received frame does not match
@@ -106,7 +106,7 @@ typedef enum{
     BB_UART_RX_ERROR_STOPBITS = 0b1000,
 } BB_UART_Rx_Frame_Error_t;
 
-typedef struct{
+typedef struct {
     BB_UART_Wordlength_t wordLen;
     BB_UART_Parity_t parity;
     BB_UART_Stopbits_t stopBits;
@@ -139,7 +139,7 @@ typedef struct{
         BB_UART_Tx_Line_State_t state;
     } __tx_internal;
     // Contains library internal variables for receiving data
-    struct{
+    struct {
         // Current word being received, including start, stop and parity bits.
         // The LSB is the last bit to be received, e.g. one of the stop bits
         // Bit order:
@@ -335,4 +335,4 @@ void BB_UART_rxFrameErrorClearedHook(BB_UART_t* uartPtr);
 #ifdef __cplusplus
 }
 #endif
-#endif // BB_UART_H
+#endif  // BB_UART_H
