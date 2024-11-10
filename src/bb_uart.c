@@ -205,6 +205,7 @@ RC_t BB_UART_validateConfig(BB_UART_t* uartPtr){
     uartPtr->__rx_internal.receivedBitsCnt = 0;
     uartPtr->__rx_internal.cooldownCycles = 0;
     uartPtr->__rx_internal.frame = BB_UART_RX_ERROR_NONE;
+uartPtr->__rx_internal.framesSinceFirstError = 0;
     return RC_SUCCESS;
 }
 
@@ -294,6 +295,11 @@ RC_t BB_UART_extractData(BB_UART_t* uartPtr, uint16_t* dataOut){
                 ret = RC_ERROR_INVALID;
                 uartPtr->__rx_internal.error |= BB_UART_RX_ERROR_PARITY;
             }
+    }
+
+    // If error flag is not 0, increment framesSinceFirstError counter
+    if(uartPtr->__rx_internal.error != BB_UART_RX_ERROR_NONE){
+        uartPtr->__rx_internal.framesSinceFirstError++;
     }
 
     // write back extracted data and return
@@ -571,13 +577,32 @@ void BB_UART_clearRxBuffer(BB_UART_t* const uartPtr){
     ring_buffer_init(uartPtr->rx_ringBuf);
 }
 
-__attribute__ ((weak)) void BB_UART_txFrameStartedHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void BB_UART_txFrameCompleteHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void BB_UART_txTransmissionCompleteHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void BB_UART_rxFrameStartDetectedHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void BB_UART_rxFrameCompleteHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void BB_UART_rxBlockedHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void BB_UART_rxUnblockedHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void BB_UART_txBlockedHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void BB_UART_txUnblockedHook(BB_UART_t* uartPtr){}
-__attribute__ ((weak)) void BB_UART_rxFrameErrorHook(BB_UART_t* uartPtr){}
+void BB_UART_resetRxErrors(BB_UART_t *const uartPtr)
+{
+    if (uartPtr == NULL)
+        return;
+    uartPtr->__rx_internal.error = BB_UART_RX_ERROR_NONE;
+    uartPtr->__rx_internal.framesSinceFirstError = 0;
+    BB_UART_rxFrameErrorClearedHook(uartPtr);
+}
+
+uint32_t BB_UART_getRxErrorRegister(BB_UART_t *const uartPtr, uint32_t *framesSinceFirstErrorPtr)
+{
+    if (uartPtr == NULL)
+        return 0;
+    if (framesSinceFirstErrorPtr != NULL)
+        *framesSinceFirstErrorPtr = uartPtr->__rx_internal.framesSinceFirstError;
+    return uartPtr->__rx_internal.error;
+}
+
+__attribute__((weak)) void BB_UART_txFrameStartedHook(BB_UART_t *uartPtr) {}
+__attribute__((weak)) void BB_UART_txFrameCompleteHook(BB_UART_t *uartPtr) {}
+__attribute__((weak)) void BB_UART_txTransmissionCompleteHook(BB_UART_t *uartPtr) {}
+__attribute__((weak)) void BB_UART_rxFrameStartDetectedHook(BB_UART_t *uartPtr) {}
+__attribute__((weak)) void BB_UART_rxFrameCompleteHook(BB_UART_t *uartPtr) {}
+__attribute__((weak)) void BB_UART_rxBlockedHook(BB_UART_t *uartPtr) {}
+__attribute__((weak)) void BB_UART_rxUnblockedHook(BB_UART_t *uartPtr) {}
+__attribute__((weak)) void BB_UART_txBlockedHook(BB_UART_t *uartPtr) {}
+__attribute__((weak)) void BB_UART_txUnblockedHook(BB_UART_t *uartPtr) {}
+__attribute__((weak)) void BB_UART_rxFrameErrorHook(BB_UART_t *uartPtr) {}
+__attribute__((weak)) void BB_UART_rxFrameErrorClearedHook(BB_UART_t *uartPtr) {}

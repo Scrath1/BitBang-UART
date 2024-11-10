@@ -166,8 +166,14 @@ typedef struct{
         // be 0.
         uint8_t cooldownCycles;
         // Expresses what is wrong with the last received frame.
-        // Multiple errors can be set as bits. Refer to BB_UART_Rx_Frame_Error_t
-        uint32_t error;
+        // Multiple errors can be set as bits. Refer to BB_UART_Rx_Frame_Error_t.
+        // This variable has to be reset manually using BB_UART_resetRxErrors().
+        volatile uint32_t error;
+        // How many frames have been received since the first error was detected.
+        // Since the error flag has to be reset manually, this only indicates the very
+        // first error. Others can have occurred since then.
+        // A value of 0 means that no errors have been detected.
+        volatile uint32_t framesSinceFirstError;
     } __rx_internal;
 } BB_UART_t;
 
@@ -256,6 +262,27 @@ uint32_t BB_UART_GetNumAvailableBytes(BB_UART_t* const uartPtr);
  * @param uartPtr [IN] pointer to uart struct
  */
 void BB_UART_clearRxBuffer(BB_UART_t* const uartPtr);
+
+/**
+ * @brief Resets the Rx error register and the
+ *  framesSinceFirstError counter.
+ * @param uartPtr [IN] pointer to uart struct
+ */
+void BB_UART_resetRxErrors(BB_UART_t* const uartPtr);
+
+/**
+ * @brief Returns the Rx error register where errors that occurred during
+ *  data reception are saved
+ * @param uartPtr [IN] pointer to uart struct
+ * @param framesSinceFirstErrorPtr [OUT] Optional.
+ *  If not null, this is used to return the number of frames since the
+ *  first time an error was detected.
+ * @return error register.
+ *  Refer to BB_UART_Rx_Frame_Error_t for information
+ *  on the meaning of each bit.
+ */
+uint32_t BB_UART_getRxErrorRegister(BB_UART_t* const uartPtr, uint32_t* framesSinceFirstErrorPtr);
+
 /**
  * @brief Executes when a tx frame was created but before the first bit is
  *  transmitted.
@@ -301,6 +328,10 @@ void BB_UART_txUnblockedHook(BB_UART_t* uartPtr);
  */
 void BB_UART_rxFrameErrorHook(BB_UART_t* uartPtr);
 
+/**
+ * @brief Executes when the rx error register is reset.
+ */
+void BB_UART_rxFrameErrorClearedHook(BB_UART_t* uartPtr);
 #ifdef __cplusplus
 }
 #endif
