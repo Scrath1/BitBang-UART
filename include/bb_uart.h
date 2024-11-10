@@ -78,11 +78,19 @@ typedef enum{
     BB_UART_RX_BLOCKED
 } BB_UART_Rx_Line_State_t;
 
+/**
+ * This option is used to set how many times the rx line is sampled to determine
+ * the average bit value during the reception time of a single bit.
+ * For a bit to be detected as low, a majority of oversampling/2+1 must be present.
+ */
 typedef enum{
     BB_UART_OVERSAMPLE_1 = 1, // No oversampling at all. Only recommended for Tx only mode
     BB_UART_OVERSAMPLE_3 = 3, // 3 bit samples are taken per rx bit
+    BB_UART_OVERSAMPLE_4 = 4,
     BB_UART_OVERSAMPLE_5 = 5, // 5 bit samples are taken per rx bit
-    BB_UART_OVERSAMPLE_7 = 7
+    BB_UART_OVERSAMPLE_6 = 6,
+    BB_UART_OVERSAMPLE_7 = 7,
+    BB_UART_OVERSAMPLE_8 = 8
 } BB_UART_Oversampling_t;
 
 typedef enum{
@@ -226,11 +234,14 @@ int32_t BB_UART_get(BB_UART_t* uartPtr, uint8_t* data, uint16_t len);
  * @param uartPtr [IN] pointer to uart struct
  * @param data [OUT] data array with a minimum size of len
  * @param len [IN] Maximum number of bytes to read from buffer
+ * @param timeoutBitcycles [IN] How many bitcycles to wait at most before returning.
+ *  This is measured in bitcycles since that is the only timesource available.
+ *  With a baudrate of 9600, a single bitcycle would be 1/9600 seconds long.
  * @return 0 if no data was read
  * @return positive numbers represent the amount of bytes saved in data
  * @return negative numbers are error codes. See datatype RC_t
  */
-int32_t BB_UART_getBlocking(BB_UART_t* uartPtr, uint8_t* data, uint16_t len);
+int32_t BB_UART_getBlocking(BB_UART_t* uartPtr, uint8_t* data, uint16_t len, uint32_t timeoutBitcycles);
 
 /**
  * @brief Returns the number of bytes ready in the Rx buffer.
@@ -242,6 +253,7 @@ uint32_t BB_UART_GetNumAvailableBytes(BB_UART_t* const uartPtr);
 
 /**
  * @brief Clears any data left in the rx buffer
+ * @param uartPtr [IN] pointer to uart struct
  */
 void BB_UART_clearRxBuffer(BB_UART_t* const uartPtr);
 /**
@@ -258,7 +270,8 @@ void BB_UART_txFrameCompleteHook(BB_UART_t* uartPtr);
  */
 void BB_UART_txTransmissionCompleteHook(BB_UART_t* uartPtr);
 /**
- * @brief Executes when a start bit was detected
+ * @brief Executes when a start bit was detected, which is during the
+ *  last sample cycle of the start bit
  */
 void BB_UART_rxFrameStartDetectedHook(BB_UART_t* uartPtr);
 /**

@@ -525,17 +525,38 @@ int32_t BB_UART_get(BB_UART_t* uartPtr, uint8_t* data, uint16_t len){
     return numBytesRead;
 }
 
-int32_t BB_UART_getBlocking(BB_UART_t* uartPtr, uint8_t* data, uint16_t len){
-    if(uartPtr == NULL) return RC_ERROR_NULL;
-    if(data == NULL) return RC_ERROR_NULL;
+int32_t BB_UART_getBlocking(BB_UART_t *uartPtr, uint8_t *data, uint16_t len, uint32_t timeoutBitcycles)
+{
+    if (uartPtr == NULL)
+        return RC_ERROR_NULL;
+    if (data == NULL)
+        return RC_ERROR_NULL;
 
+    uint32_t bitCycleCounter = 0;
     uint32_t numBytesRead = 0;
-    while(numBytesRead < len){
+    bool overSampleCounterWasZero = false;
+    while (numBytesRead < len)
+    {
         uint8_t b = 0;
-        if(RC_SUCCESS == ring_buffer_get(uartPtr->rx_ringBuf, &b)){
+        if (RC_SUCCESS == ring_buffer_get(uartPtr->rx_ringBuf, &b))
+        {
             data[numBytesRead] = b;
             numBytesRead++;
         }
+
+        // check for timeout. Make sure that the bitCycleCounter is only incremented
+        // once every time the oversamplecounter hits zero.
+        if (uartPtr->__rx_internal.overSampleCounter == 0 && !overSampleCounterWasZero)
+        {
+            bitCycleCounter++;
+            overSampleCounterWasZero = true;
+        }
+        else if (uartPtr->__rx_internal.overSampleCounter != 0 && overSampleCounterWasZero)
+        {
+            overSampleCounterWasZero = false;
+        }
+        if (bitCycleCounter >= timeoutBitcycles)
+            break;
     }
     return numBytesRead;
 }
