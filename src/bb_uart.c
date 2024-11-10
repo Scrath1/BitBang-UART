@@ -335,7 +335,8 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
 
     // Sample Rx line
     // ------------------------
-    uint16_t* bitSamples = &(uartPtr->__rx_internal.bitSamples);
+    uint16_t *bitSamples = &(uartPtr->__rx_internal.bitSamples);
+    uint8_t *receivedBitsCnt = &(uartPtr->__rx_internal.receivedBitsCnt);
     // absolute bit sample
     uint8_t b = uartPtr->readPinFunc();
     // shift bit sample into bitsamples
@@ -383,7 +384,29 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr){
         case BB_UART_RX_RECEIVING_FRAME:
             // Only evaluate the sample every few cycles to allow for
             // oversampling
-            if(uartPtr->__rx_internal.overSampleCounter != 0) break;
+        const uint32_t frameSize = BB_UART_calculateFrameSize(uartPtr);
+        // Return if Oversampling period isn't done yet.
+        // Exception is made for the stopbit to allow fuzzy matching.
+        // This is necessary for cases in which the sender does not have a
+        // tiny delay between sending its stop and start bits.
+        bool stopBitReached = (*receivedBitsCnt >= (frameSize - 1));
+        if (stopBitReached)
+        {
+            // fuzzy match the last stop bit by using the sample directly
+            // rather than an average
+            *framePtr = ((*framePtr) << 1) | b;
+            uartPtr->__rx_internal.receivedBitsCnt++;
+        }
+        else if (uartPtr->__rx_internal.overSampleCounter != 0 && !stopBitReached)
+        {
+            // If this is not the last stop bit and the oversampling period for
+            // bit averaging is not done yet, return here.
+            break;
+        }
+        else
+        {
+            // Oversampling period is done and this is not the final stopbit.
+            // Use averaged bit to add to the frame
             *framePtr = ((*framePtr) << 1) | averagedBit;
             const uint32_t frameSize = BB_UART_calculateFrameSize(uartPtr);
             uartPtr->__rx_internal.receivedBitsCnt++;
