@@ -78,7 +78,9 @@ For specific examples, look to the `examples` folder. Examples prefixed with
 This library has a number of hook functions you can overwrite which are triggered
 automatically based on events during sending or receiving data.
 While the original purpose of these functions is to aid in debugging the library,
-they can also be used to handle UART events.
+they can also be used to handle UART events. Keep in mind that these functions
+are still running in the context of a timer interrupt, so keep whatever you do
+in them to a minimum in regards to execution time.
 
 Examples:
 - `BB_UART_rxFrameCompleteHook()` is called whenever reception of an Rx frame
@@ -102,6 +104,11 @@ able to use this library for USART as well by doing the following:
 2. Instead of a timer, use a GPIO interrupt to trigger the `BB_UART_service()`
    function.
 3. Apply an external clock to the GPIO pin you configured for the interrupt.
+
+## Running unit tests
+This library is built using PlatformIO and uses its integration for unit testing.
+To run the tests, use the command `pio test -e native` which will run the tests
+using the `native` environment specied in `platformio.ini`.
 
 ## Found a Bug?
 Feel free to open an issue.
