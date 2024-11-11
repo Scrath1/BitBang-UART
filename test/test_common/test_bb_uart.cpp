@@ -1,12 +1,12 @@
-#include <gtest/gtest.h>
 #include <bb_uart.h>
+#include <gtest/gtest.h>
 #include <stdio.h>
 
 // bit positions in this macro are 0-indexed
-#define SET_BIT(p,n) ((p) |= (1 << (n)))
-#define CLR_BIT(p,n) ((p) &= ~((1) << (n)))
-#define TGL_BIT(p,n) ((p) ^= (1<<(n)))
-#define CHK_BIT(p,n) (((p) &  (1<<(n))) >> n)
+#define SET_BIT(p, n) ((p) |= (1 << (n)))
+#define CLR_BIT(p, n) ((p) &= ~((1) << (n)))
+#define TGL_BIT(p, n) ((p) ^= (1 << (n)))
+#define CHK_BIT(p, n) (((p) & (1 << (n))) >> n)
 // len: length of bit mask/number of set bits
 // start: start position of bit msk as 0-based index
 #define MSK_BIT(len, start) (((1 << len) - 1) << start)
@@ -16,16 +16,16 @@
 
 // Library internal functions
 extern "C" {
-    uint8_t BB_UART_calculateFrameSize(const BB_UART_t* const uartPtr);
-    uint32_t BB_UART_numOfSetBits(uint32_t var, uint32_t bitsToEval);
-    RC_t BB_UART_createNextFrame(BB_UART_t* uartPtr);
-    RC_t BB_UART_transmitBit(BB_UART_t* uartPtr);
-    RC_t BB_UART_validateConfig(BB_UART_t* uartPtr);
-    RC_t BB_UART_extractData(BB_UART_t* uartPtr, uint16_t* dataOut);
-    RC_t BB_UART_receiveBit(BB_UART_t* uartPtr);
+uint8_t BB_UART_calculateFrameSize(const BB_UART_t* const uartPtr);
+uint32_t BB_UART_numOfSetBits(uint32_t var, uint32_t bitsToEval);
+RC_t BB_UART_createNextFrame(BB_UART_t* uartPtr);
+RC_t BB_UART_transmitBit(BB_UART_t* uartPtr);
+RC_t BB_UART_validateConfig(BB_UART_t* uartPtr);
+RC_t BB_UART_extractData(BB_UART_t* uartPtr, uint16_t* dataOut);
+RC_t BB_UART_receiveBit(BB_UART_t* uartPtr);
 }
 
-struct RxTxWireSim{
+struct RxTxWireSim {
     static const uint32_t wireLen = 64;
     // rx wire uses single bits to simulate the oversampling
     uint16_t rxWire[wireLen] = {0};
@@ -48,32 +48,33 @@ struct RxTxWireSim{
     // can happen
     // returns true if successfull,
     // false if the testwire is used up or uartPtr wasn't set
-    bool advanceClock(){
+    bool advanceClock() {
         if(uartPtr == NULL) return false;
-        oversamplingPos = (oversamplingPos+1) % uartPtr->oversampling;
-        if(oversamplingPos == 0){
+        oversamplingPos = (oversamplingPos + 1) % uartPtr->oversampling;
+        if(oversamplingPos == 0) {
             wirePos++;
         }
-        if(wirePos >= wireLen) return false;
-        else return true;
+        if(wirePos >= wireLen)
+            return false;
+        else
+            return true;
     }
 
-    uint8_t sampleRx(){
+    uint8_t sampleRx() {
         if(wirePos < wireLen)
             return CHK_BIT(rxWire[wirePos], oversamplingPos);
         else
             return 0;
     }
 
-    void writeTx(uint8_t val){
-        if(wirePos < wireLen)
-            txWire[wirePos] = val;
+    void writeTx(uint8_t val) {
+        if(wirePos < wireLen) txWire[wirePos] = val;
     }
 
-    void resetWires(){
+    void resetWires() {
         oversamplingPos = 0;
         wirePos = 0;
-        for(uint32_t i = 0; i < wireLen; i++){
+        for(uint32_t i = 0; i < wireLen; i++) {
             // idle level of wire is high
             rxWire[i] = 0xFFFF;
             txWire[i] = true;
@@ -84,18 +85,17 @@ struct RxTxWireSim{
     // data line and thereby follwing this format:
     // MSB                                   LSB
     // | start bit | data | parity | stop bits |
-    bool addRxFrame(uint32_t startPos, uint16_t rxFrame){
+    bool addRxFrame(uint32_t startPos, uint16_t rxFrame) {
         if(uartPtr == NULL) return false;
         const uint32_t frameSize = BB_UART_calculateFrameSize(uartPtr);
         if(startPos + frameSize >= wireLen) return false;
 
-        for(uint32_t i = 0; i < frameSize; i++){
+        for(uint32_t i = 0; i < frameSize; i++) {
             // add fake uart frame
-            if(CHK_BIT(rxFrame, frameSize-1-i) == 0){
+            if(CHK_BIT(rxFrame, frameSize - 1 - i) == 0) {
                 // set rxWire value to 0
                 rxWire[startPos + i] = 0;
-            }
-            else{
+            } else {
                 // set rxWire value to 1 bits
                 rxWire[startPos + i] = MSK_BIT(uartPtr->oversampling, 0);
             }
@@ -105,7 +105,7 @@ struct RxTxWireSim{
 
     /**
      * @brief Searches for a UART frame on the Tx wire starting at
-     *  startPos. 
+     *  startPos.
      * @param startPos [INOUT] Position on Tx wire from which to start searching
      *  for a UART frame. This variable is incremented until a start bit is found
      *  and the position of this start bit is returned using this parameter. If no
@@ -116,19 +116,19 @@ struct RxTxWireSim{
      * @return UART frame in Rx Format (MSB - |start|data|parity|stop| - LSB)
      * @return UINT16_MAX if no full frame was found or startPos was invalid.
      */
-    uint16_t frameFromTxWire(uint32_t* startPos){
+    uint16_t frameFromTxWire(uint32_t* startPos) {
         if(startPos == NULL) return UINT16_MAX;
         const uint32_t frameSize = BB_UART_calculateFrameSize(uartPtr);
         // begin by searching for next start bit.
-        while(txWire[*startPos] != START_BIT_LEVEL){
+        while(txWire[*startPos] != START_BIT_LEVEL) {
             (*startPos)++;
-            if((*startPos) + frameSize >= wireLen){
+            if((*startPos) + frameSize >= wireLen) {
                 *startPos = wireLen;
                 return UINT16_MAX;
             }
         }
         uint16_t out = 0;
-        for(uint32_t i = 0; i < frameSize; i++){
+        for(uint32_t i = 0; i < frameSize; i++) {
             out = (out << 1) | txWire[(*startPos) + i];
         }
         return out;
@@ -136,49 +136,38 @@ struct RxTxWireSim{
 };
 
 RxTxWireSim simWire;
-void writePinFunc(uint8_t val){
-    simWire.writeTx(val);
-}
-uint8_t readPinFunc(){
-    return simWire.sampleRx();
-}
+void writePinFunc(uint8_t val) { simWire.writeTx(val); }
+uint8_t readPinFunc() { return simWire.sampleRx(); }
 
-class BB_UART_Test : public testing::Test
-{
-    protected:
-        
+class BB_UART_Test : public testing::Test {
+   protected:
+    RING_BUFFER_DEF(rx_ringbuf, 8);
+    RING_BUFFER_DEF(tx_ringbuf, 8);
+    BB_UART_t testUart = {.wordLen = BB_UART_WORDLENGTH_8,
+                          .parity = BB_UART_PARITY_EVEN,
+                          .stopBits = BB_UART_STOPBITS_1,
+                          .tx_ringBuf = &tx_ringbuf,
+                          .rx_ringBuf = &rx_ringbuf,
+                          .writePinFunc = writePinFunc,
+                          .readPinFunc = readPinFunc,
+                          .mode = BB_UART_RX_TX,
+                          .oversampling = BB_UART_OVERSAMPLE_3};
 
-        RING_BUFFER_DEF(rx_ringbuf, 8);
-        RING_BUFFER_DEF(tx_ringbuf, 8);
-        BB_UART_t testUart = {
-            .wordLen = BB_UART_WORDLENGTH_8,
-            .parity = BB_UART_PARITY_EVEN,
-            .stopBits = BB_UART_STOPBITS_1,
-            .tx_ringBuf = &tx_ringbuf,
-            .rx_ringBuf = &rx_ringbuf,
-            .writePinFunc = writePinFunc,
-            .readPinFunc = readPinFunc,
-            .mode = BB_UART_RX_TX,
-            .oversampling = BB_UART_OVERSAMPLE_3
-        };
-
-    void SetUp() override
-    {
+    void SetUp() override {
         // set dummy lines to 1 (idle level)
         simWire.uartPtr = &testUart;
         simWire.resetWires();
         BB_UART_validateConfig(&testUart);
     }
-    void TearDown() override
-    {
+    void TearDown() override {
         // Empty test buffer
     }
 
     // converts a txFrame to an rxFrame and vice-versa
-    uint16_t invertFrame(uint16_t frame){
+    uint16_t invertFrame(uint16_t frame) {
         const uint8_t frameSize = BB_UART_calculateFrameSize(&testUart);
         uint16_t out = 0;
-        for(uint8_t i = 0; i < frameSize; i++){
+        for(uint8_t i = 0; i < frameSize; i++) {
             uint8_t b = (frame >> i) & 0b1;
             out = (out << 1) | b;
         }
@@ -186,7 +175,7 @@ class BB_UART_Test : public testing::Test
     }
 };
 
-TEST_F(BB_UART_Test, FrameSizeCalculationTest){
+TEST_F(BB_UART_Test, FrameSizeCalculationTest) {
     // 8N1 Frame should have 10 bits. 1 Start, 8 data, 1 Stop
     BB_UART_t uart8N1 = {
         .wordLen = BB_UART_WORDLENGTH_7,
@@ -203,9 +192,9 @@ TEST_F(BB_UART_Test, FrameSizeCalculationTest){
     EXPECT_EQ(11, BB_UART_calculateFrameSize(&uart7E2));
 }
 
-TEST_F(BB_UART_Test, NumOfSetBitsTest){
+TEST_F(BB_UART_Test, NumOfSetBitsTest) {
     uint32_t testVar = 0;
-    EXPECT_EQ(0, BB_UART_numOfSetBits(testVar, sizeof(uint32_t)*8));
+    EXPECT_EQ(0, BB_UART_numOfSetBits(testVar, sizeof(uint32_t) * 8));
     testVar = 0b1100;
     // try to check 0 bits
     EXPECT_EQ(0, BB_UART_numOfSetBits(testVar, 0));
@@ -216,15 +205,15 @@ TEST_F(BB_UART_Test, NumOfSetBitsTest){
 
     // Try to check with 16 and 32 set bits
     testVar = 0xFFFF;
-    EXPECT_EQ(16, BB_UART_numOfSetBits(testVar, sizeof(uint32_t)*8));
+    EXPECT_EQ(16, BB_UART_numOfSetBits(testVar, sizeof(uint32_t) * 8));
     testVar = 0xFFFFFFFF;
-    EXPECT_EQ(32, BB_UART_numOfSetBits(testVar, sizeof(uint32_t)*8));
+    EXPECT_EQ(32, BB_UART_numOfSetBits(testVar, sizeof(uint32_t) * 8));
 
     // Try to check for more bits than there is size
-    EXPECT_EQ(32, BB_UART_numOfSetBits(testVar, sizeof(uint64_t)*8));
+    EXPECT_EQ(32, BB_UART_numOfSetBits(testVar, sizeof(uint64_t) * 8));
 }
 
-TEST_F(BB_UART_Test, CreateTxFrameTest){
+TEST_F(BB_UART_Test, CreateTxFrameTest) {
     // ToDo: Implement
     const uint8_t refData = 42;
     ASSERT_EQ(RC_SUCCESS, BB_UART_putc(&testUart, (char)refData));
@@ -236,35 +225,32 @@ TEST_F(BB_UART_Test, CreateTxFrameTest){
     const uint32_t refDataHighBits = BB_UART_numOfSetBits(refData, 8);
     const uint32_t parityBitPos = testUart.wordLen + 1;
     ASSERT_NE(BB_UART_PARITY_NONE, testUart.parity);
-    if(testUart.parity == BB_UART_PARITY_EVEN){
-        if(refDataHighBits % 2 != 0){
+    if(testUart.parity == BB_UART_PARITY_EVEN) {
+        if(refDataHighBits % 2 != 0) {
             // uneven number of set bits in data. Parity bit should be set
             // for even parity
             EXPECT_EQ(1, CHK_BIT(testUart.__tx_internal.frame, parityBitPos));
-        }
-        else{
+        } else {
             EXPECT_EQ(0, CHK_BIT(testUart.__tx_internal.frame, parityBitPos));
         }
-    }
-    else if(testUart.parity == BB_UART_PARITY_ODD){
-        if(refDataHighBits % 2 != 0){
+    } else if(testUart.parity == BB_UART_PARITY_ODD) {
+        if(refDataHighBits % 2 != 0) {
             // uneven number of set bits in data. Parity bit should not be set
             // for odd parity
             EXPECT_EQ(0, CHK_BIT(testUart.__tx_internal.frame, parityBitPos));
-        }
-        else{
+        } else {
             EXPECT_EQ(1, CHK_BIT(testUart.__tx_internal.frame, parityBitPos));
         }
     }
 
     // Check that stop bits are set
     EXPECT_EQ(STOP_BIT_LEVEL, CHK_BIT(testUart.__tx_internal.frame, parityBitPos + 1));
-    if(testUart.stopBits == BB_UART_STOPBITS_2){
+    if(testUart.stopBits == BB_UART_STOPBITS_2) {
         EXPECT_EQ(STOP_BIT_LEVEL, CHK_BIT(testUart.__tx_internal.frame, parityBitPos + 2));
     }
 }
 
-TEST_F(BB_UART_Test, ExtractDataTest){
+TEST_F(BB_UART_Test, ExtractDataTest) {
     const uint8_t refData = 42;
     ASSERT_EQ(RC_SUCCESS, BB_UART_putc(&testUart, (char)refData));
     ASSERT_EQ(RC_SUCCESS, BB_UART_createNextFrame(&testUart));
@@ -272,7 +258,7 @@ TEST_F(BB_UART_Test, ExtractDataTest){
     uint16_t cleanRxFrame = 0;
     // reverse tx frame to get an rx frame
     const uint8_t frameSize = BB_UART_calculateFrameSize(&testUart);
-    for(uint8_t i = 0; i < frameSize; i++){
+    for(uint8_t i = 0; i < frameSize; i++) {
         uint8_t b = (txFrame >> i) & 0b1;
         cleanRxFrame = (cleanRxFrame << 1) | b;
     }
@@ -296,9 +282,9 @@ TEST_F(BB_UART_Test, ExtractDataTest){
     // internal error variable should note that the stop bit failed
     EXPECT_TRUE(testUart.__rx_internal.error & BB_UART_RX_ERROR_STOPBITS);
     testUart.__rx_internal.frame = cleanRxFrame;
-    
+
     // next mess up the start bit by flipping it from low to high
-    SET_BIT(testUart.__rx_internal.frame, frameSize-1);
+    SET_BIT(testUart.__rx_internal.frame, frameSize - 1);
     EXPECT_EQ(RC_ERROR_INVALID, BB_UART_extractData(&testUart, &data));
     EXPECT_TRUE(testUart.__rx_internal.error & BB_UART_RX_ERROR_STARTBIT);
     testUart.__rx_internal.frame = cleanRxFrame;
@@ -311,7 +297,7 @@ TEST_F(BB_UART_Test, ExtractDataTest){
     EXPECT_TRUE(testUart.__rx_internal.error & BB_UART_RX_ERROR_PARITY);
 }
 
-TEST_F(BB_UART_Test, SingleByteTxTest){
+TEST_F(BB_UART_Test, SingleByteTxTest) {
     // Test purely tx operation mode here. This requires oversampling of 1
     testUart.mode = BB_UART_TX_ONLY;
     testUart.oversampling = BB_UART_OVERSAMPLE_1;
@@ -327,7 +313,7 @@ TEST_F(BB_UART_Test, SingleByteTxTest){
     ASSERT_EQ(RC_SUCCESS, BB_UART_putc(&testUart, refData));
 
     const uint32_t frameSize = BB_UART_calculateFrameSize(&testUart);
-    for(uint32_t i = 0; i < frameSize * testUart.oversampling; i++){
+    for(uint32_t i = 0; i < frameSize * testUart.oversampling; i++) {
         BB_UART_service(&testUart);
         simWire.advanceClock();
     }
@@ -338,7 +324,7 @@ TEST_F(BB_UART_Test, SingleByteTxTest){
     EXPECT_EQ(expectedRxFrame, outputFrame);
 }
 
-TEST_F(BB_UART_Test, MultiByteRxTest){
+TEST_F(BB_UART_Test, MultiByteRxTest) {
     // Test purely tx operation mode here.
     testUart.mode = BB_UART_RX_ONLY;
 
@@ -356,7 +342,7 @@ TEST_F(BB_UART_Test, MultiByteRxTest){
     ASSERT_TRUE(simWire.addRxFrame(frameStartPos + frameSize + 1, rxTestFrame));
 
     // simulate reception process
-    do{
+    do {
         BB_UART_service(&testUart);
     } while(simWire.advanceClock());
 
@@ -369,7 +355,7 @@ TEST_F(BB_UART_Test, MultiByteRxTest){
     EXPECT_EQ(data[1], refData);
 }
 
-TEST_F(BB_UART_Test, OneWireModeTest){
+TEST_F(BB_UART_Test, OneWireModeTest) {
     testUart.mode = BB_UART_ONE_WIRE;
     uint8_t refData = 42;
     ASSERT_EQ(RC_SUCCESS, BB_UART_putc(&testUart, refData));
@@ -384,12 +370,12 @@ TEST_F(BB_UART_Test, OneWireModeTest){
     ASSERT_TRUE(simWire.addRxFrame(frameSize * 3, rxTestFrame));
 
     ASSERT_EQ(RC_SUCCESS, BB_UART_putc(&testUart, refData));
-    do{
+    do {
         EXPECT_EQ(RC_SUCCESS, BB_UART_service(&testUart));
-        if(testUart.__tx_internal.state != BB_UART_TX_IDLE){
+        if(testUart.__tx_internal.state != BB_UART_TX_IDLE) {
             // EXPECT_EQ(BB_UART_RX_BLOCKED, testUart.__rx_internal.state);
         }
-        if(testUart.__rx_internal.state != BB_UART_RX_IDLE){
+        if(testUart.__rx_internal.state != BB_UART_RX_IDLE) {
             // EXPECT_EQ(BB_UART_TX_BLOCKED, testUart.__tx_internal.state);
         }
     } while(simWire.advanceClock());

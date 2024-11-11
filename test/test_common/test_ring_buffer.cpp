@@ -1,33 +1,28 @@
 #include <gtest/gtest.h>
-#include <stdio.h>
 #include <ring_buffer.h>
+#include <stdio.h>
 
-class Ring_Buffer_Test : public testing::Test
-{
-    protected:
-        RING_BUFFER_DEF(test_buffer, 4);
-    
-    void SetUp() override
-    {
-        ring_buffer_init(&test_buffer);
-    }
-    void TearDown() override
-    {
+class Ring_Buffer_Test : public testing::Test {
+   protected:
+    RING_BUFFER_DEF(test_buffer, 4);
+
+    void SetUp() override { ring_buffer_init(&test_buffer); }
+    void TearDown() override {
         // Empty test buffer
         uint8_t b;
         while(RC_ERROR_BUFFER_EMPTY != ring_buffer_get(&test_buffer, &b));
     }
 };
 
-void dumpRingBuffer(ring_buffer *const rb){
-    for(uint32_t i = 0; i < rb->len-1; i++){
+void dumpRingBuffer(ring_buffer* const rb) {
+    for(uint32_t i = 0; i < rb->len - 1; i++) {
         printf("[%lu]: %u, ", i, rb->buffer[i]);
     }
-    printf("[%lu]: %u\n", rb->len-1, rb->buffer[rb->len-1]);
+    printf("[%lu]: %u\n", rb->len - 1, rb->buffer[rb->len - 1]);
     printf("head: %lu, tail: %lu", rb->head, rb->tail);
 }
 
-TEST_F(Ring_Buffer_Test, IsEmptyFunctionTest){
+TEST_F(Ring_Buffer_Test, IsEmptyFunctionTest) {
     // Assert that the ringbuffer is truly empty before beginning test
     ASSERT_EQ(test_buffer.head, test_buffer.tail);
     // check is_empty detection
@@ -47,11 +42,11 @@ TEST_F(Ring_Buffer_Test, IsEmptyFunctionTest){
     EXPECT_TRUE(ring_buffer_is_empty(&test_buffer));
 }
 
-TEST_F(Ring_Buffer_Test, AvailabilityFunctionTest){
+TEST_F(Ring_Buffer_Test, AvailabilityFunctionTest) {
     // With every item put into the buffer, the return of avail should
     // rise by one until the buffer is full
     uint32_t expectedVal = 0;
-    while(!ring_buffer_is_full(&test_buffer)){
+    while(!ring_buffer_is_full(&test_buffer)) {
         EXPECT_EQ(expectedVal, ring_buffer_avail(&test_buffer));
         ASSERT_EQ(RC_SUCCESS, ring_buffer_put(&test_buffer, 0));
         expectedVal++;
@@ -64,17 +59,17 @@ TEST_F(Ring_Buffer_Test, AvailabilityFunctionTest){
     EXPECT_EQ(expectedVal, ring_buffer_avail(&test_buffer));
 }
 
-TEST_F(Ring_Buffer_Test, StateDetectionTest){
+TEST_F(Ring_Buffer_Test, StateDetectionTest) {
     const uint32_t len = test_buffer.len;
     EXPECT_TRUE(ring_buffer_is_empty(&test_buffer));
     // fill ringbuffer except for one byte. Keep in mind
     // that actual capacity of the buffer is len - 1.
-    for(uint32_t i = 1; i < len-1; i++){
+    for(uint32_t i = 1; i < len - 1; i++) {
         RC_t ret = ring_buffer_put(&test_buffer, (uint8_t)i);
         ASSERT_EQ(ret, RC_SUCCESS);
         bool isFull = ring_buffer_is_full(&test_buffer);
         EXPECT_FALSE(isFull);
-        if(isFull){
+        if(isFull) {
             dumpRingBuffer(&test_buffer);
         }
         EXPECT_EQ(i, ring_buffer_avail(&test_buffer));
@@ -86,12 +81,12 @@ TEST_F(Ring_Buffer_Test, StateDetectionTest){
     EXPECT_FALSE(ring_buffer_is_empty(&test_buffer));
 }
 
-TEST_F(Ring_Buffer_Test, CircularOverrideTest){
+TEST_F(Ring_Buffer_Test, CircularOverrideTest) {
     ASSERT_TRUE(ring_buffer_is_empty(&test_buffer));
     // fill buffer completely but don't try to override anything yet
-    for(uint32_t i = 0; i < (test_buffer.len-1); i++){
+    for(uint32_t i = 0; i < (test_buffer.len - 1); i++) {
         ring_buffer_put(&test_buffer, i);
-        if(i != test_buffer.len - 2){
+        if(i != test_buffer.len - 2) {
             EXPECT_FALSE(ring_buffer_is_full(&test_buffer));
         }
     }
