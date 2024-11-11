@@ -103,12 +103,33 @@ struct RxTxWireSim{
         return true;
     }
 
-    uint16_t frameFromTxWire(uint32_t startPos){
+    /**
+     * @brief Searches for a UART frame on the Tx wire starting at
+     *  startPos. 
+     * @param startPos [INOUT] Position on Tx wire from which to start searching
+     *  for a UART frame. This variable is incremented until a start bit is found
+     *  and the position of this start bit is returned using this parameter. If no
+     *  UART frame is found, the variable will keep incrementing until it hits
+     *  the maximum idx determined by wireLen. If a start bit is found but the
+     *  remaining UART frame would not fit into the rest of the Tx wire array,
+     *  startPos is also set to wireLen.
+     * @return UART frame in Rx Format (MSB - |start|data|parity|stop| - LSB)
+     * @return UINT16_MAX if no full frame was found or startPos was invalid.
+     */
+    uint16_t frameFromTxWire(uint32_t* startPos){
+        if(startPos == NULL) return UINT16_MAX;
         const uint32_t frameSize = BB_UART_calculateFrameSize(uartPtr);
-        if(startPos + frameSize >= wireLen) return UINT16_MAX;
+        // begin by searching for next start bit.
+        while(txWire[*startPos] != START_BIT_LEVEL){
+            (*startPos)++;
+            if((*startPos) + frameSize >= wireLen){
+                *startPos = wireLen;
+                return UINT16_MAX;
+            }
+        }
         uint16_t out = 0;
         for(uint32_t i = 0; i < frameSize; i++){
-            out = (out << 1) | txWire[startPos + i];
+            out = (out << 1) | txWire[(*startPos) + i];
         }
         return out;
     }
@@ -311,7 +332,8 @@ TEST_F(BB_UART_Test, SingleByteTxTest){
         simWire.advanceClock();
     }
 
-    uint16_t outputFrame = simWire.frameFromTxWire(0);
+    uint32_t startPos = 0;
+    uint16_t outputFrame = simWire.frameFromTxWire(&startPos);
     ASSERT_NE(UINT16_MAX, outputFrame);
     EXPECT_EQ(expectedRxFrame, outputFrame);
 }
@@ -379,13 +401,16 @@ TEST_F(BB_UART_Test, OneWireModeTest){
     EXPECT_EQ(2, dataRead);
     EXPECT_EQ(data[0], refData);
     EXPECT_EQ(data[1], refData);
-    // and one byte should have been sent
-    // calculate expected startposition of tx frame
-    // After one frame was received, UART has to wait for 2*oversampling+1
-    // cycles before resuming tx operation. Since transmission only occur
-    // when oversampleCounter == 0 this rounds up to 3 oversampling cycles
-    const uint32_t txFrameStartPos = frameSize + 3;
-    uint16_t transmittedFrame = simWire.frameFromTxWire(txFrameStartPos);
+    // Start position of transmitted frame should be shortly after one rx frame
+    // but not immediately due to a short cooldown after receiving data before
+    // reenabling data transmission
+    uint32_t txFrameStartPos = frameSize;
+    uint16_t transmittedFrame = simWire.frameFromTxWire(&txFrameStartPos);
+    // Check that frameFromTxWire was successful
+    ASSERT_NE(transmittedFrame, UINT16_MAX);
+    // Tx start position should have been shortly after the finished rx frame
+    EXPECT_LT(txFrameStartPos, (frameSize * 1.5));
+    // Put extracted testframe into rx framebuffer for data extraction
     testUart.__rx_internal.frame = transmittedFrame;
     testUart.__rx_internal.receivedBitsCnt = frameSize;
     uint16_t b = 0;
