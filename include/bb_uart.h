@@ -125,6 +125,10 @@ typedef struct {
     // for the timerCallback. With 3 times oversampling the timer has to run
     // at 3 times the baud rate.
     BB_UART_Oversampling_t oversampling;
+    // Enables/Disables the UART to save processing time
+    // This variable is automatically initialized to true in
+    // the BB_UART_validateConfig function.
+    bool __enabled;
     // Contains library internal variables for transmitting data
     struct {
         // Current word being transmit, including start stop and parity bits.
@@ -282,6 +286,31 @@ void BB_UART_resetRxErrors(BB_UART_t* const uartPtr);
  *  on the meaning of each bit.
  */
 uint32_t BB_UART_getRxErrorRegister(BB_UART_t* const uartPtr, uint32_t* framesSinceFirstErrorPtr);
+
+/**
+ * @brief Disables the BitBang UART making the service function return
+ *  immediately when called. Care should be taken that the UART is
+ *  not in the middle of a transmission or data reception when
+ *  it is disabled.
+ * @param uartPtr [IN] pointer to uart struct
+ */
+void BB_UART_disable(BB_UART_t* const uartPtr);
+
+/**
+ * @brief Reenables the BitBang UART after it was manually disabled.
+ *  This also resets internal variables used by the UART but does not
+ *  clear the Rx or Tx buffers.
+ * @param uartPtr [IN] pointer to uart struct
+ */
+void BB_UART_enable(BB_UART_t* const uartPtr);
+
+/**
+ * @brief Returns whether the BitBang UART is currently enabled
+ * @param uartPtr [IN] pointer to uart struct
+ * @return true It is enabled
+ * @return false It is disabled or the given uartPtr is invalid
+ */
+bool BB_UART_isEnabled(BB_UART_t* const uartPtr);
 
 /**
  * @brief Executes when a tx frame was created but before the first bit is

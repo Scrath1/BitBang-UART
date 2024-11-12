@@ -171,6 +171,27 @@ RC_t BB_UART_transmitBit(BB_UART_t* uartPtr) {
     return RC_SUCCESS;
 }
 
+/**
+ * @brief Resets internal variables of the UART but does not clear
+ *  the Rx or Tx buffers
+ * @param uartPtr [IN] pointer to uart struct
+ */
+void BB_UART_resetInternals(BB_UART_t* uartPtr){
+    if(uartPtr == NULL) return;
+    uartPtr->__enabled = true;
+    uartPtr->__tx_internal.frame = 0;
+    uartPtr->__tx_internal.remainingFrameBits = 0;
+    uartPtr->__tx_internal.state = BB_UART_TX_IDLE;
+    uartPtr->__rx_internal.frame = RX_BITSAMPLES_RESET_VALUE;  // idle line is high
+    uartPtr->__rx_internal.bitSamples = RX_BITSAMPLES_RESET_VALUE;
+    uartPtr->__rx_internal.overSampleCounter = 0;
+    uartPtr->__rx_internal.state = BB_UART_RX_IDLE;
+    uartPtr->__rx_internal.receivedBitsCnt = 0;
+    uartPtr->__rx_internal.cooldownCycles = 0;
+    uartPtr->__rx_internal.frame = BB_UART_RX_ERROR_NONE;
+    uartPtr->__rx_internal.framesSinceFirstError = 0;
+}
+
 RC_t BB_UART_validateConfig(BB_UART_t* uartPtr) {
     if(uartPtr == NULL) return RC_ERROR_NULL;
     BB_UART_Mode_t mode = uartPtr->mode;
@@ -195,17 +216,7 @@ RC_t BB_UART_validateConfig(BB_UART_t* uartPtr) {
     if(uartPtr->oversampling == 0) uartPtr->oversampling = DEFAULT_OVERSAMPLING;
 
     // initialize internal data
-    uartPtr->__tx_internal.frame = 0;
-    uartPtr->__tx_internal.remainingFrameBits = 0;
-    uartPtr->__tx_internal.state = BB_UART_TX_IDLE;
-    uartPtr->__rx_internal.frame = RX_BITSAMPLES_RESET_VALUE;  // idle line is high
-    uartPtr->__rx_internal.bitSamples = RX_BITSAMPLES_RESET_VALUE;
-    uartPtr->__rx_internal.overSampleCounter = 0;
-    uartPtr->__rx_internal.state = BB_UART_RX_IDLE;
-    uartPtr->__rx_internal.receivedBitsCnt = 0;
-    uartPtr->__rx_internal.cooldownCycles = 0;
-    uartPtr->__rx_internal.frame = BB_UART_RX_ERROR_NONE;
-    uartPtr->__rx_internal.framesSinceFirstError = 0;
+    BB_UART_resetInternals(uartPtr);
     return RC_SUCCESS;
 }
 
@@ -460,6 +471,8 @@ RC_t BB_UART_receiveBit(BB_UART_t* uartPtr) {
 
 RC_t BB_UART_service(BB_UART_t* uartPtr) {
     if(uartPtr == NULL) return RC_ERROR_NULL;
+    // If UART is disabled, return here immediately
+    if(!uartPtr->__enabled) return RC_SUCCESS;
     // Shortcut variable
     uint8_t* overSampleCounter = &(uartPtr->__rx_internal.overSampleCounter);
 
@@ -588,6 +601,22 @@ uint32_t BB_UART_getRxErrorRegister(BB_UART_t* const uartPtr, uint32_t* framesSi
     if(uartPtr == NULL) return 0;
     if(framesSinceFirstErrorPtr != NULL) *framesSinceFirstErrorPtr = uartPtr->__rx_internal.framesSinceFirstError;
     return uartPtr->__rx_internal.error;
+}
+
+void BB_UART_disable(BB_UART_t* const uartPtr){
+    if(uartPtr == NULL) return;
+    uartPtr->__enabled = false;
+}
+
+void BB_UART_enable(BB_UART_t* const uartPtr){
+    if(uartPtr == NULL) return;
+    uartPtr->__enabled = true;
+    BB_UART_resetInternals(uartPtr);
+}
+
+bool BB_UART_isEnabled(BB_UART_t* const uartPtr){
+    if(uartPtr == NULL) return false;
+    return uartPtr->__enabled;
 }
 
 __attribute__((weak)) void BB_UART_txFrameStartedHook(BB_UART_t* uartPtr) {}
