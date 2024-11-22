@@ -227,6 +227,14 @@ RC_t BB_UART_put(BB_UART_t* uartPtr, const uint8_t* data, uint32_t dataLen);
 RC_t BB_UART_putc(BB_UART_t* uartPtr, char c);
 
 /**
+ * @brief Returns true if the tx buffer is empty
+ * @return true if tx buffer is empty
+ * @return false there are still bytes to transmit
+ *  or the uartPtr was NULL
+ */
+bool BB_UART_isTxBufferEmpty(BB_UART_t* const uartPtr);
+
+/**
  * @brief Read up to len bytes from the rx buffer. If not enough data is
  *  available, return after reading all available data.
  * @param uartPtr [IN] pointer to uart struct

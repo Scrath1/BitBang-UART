@@ -537,6 +537,11 @@ RC_t BB_UART_putc(BB_UART_t* uartPtr, char c) {
     return RC_SUCCESS;
 }
 
+bool BB_UART_isTxBufferEmpty(BB_UART_t* const uartPtr){
+    if(uartPtr == NULL) return false;
+    return ring_buffer_is_empty(uartPtr->tx_ringBuf);
+}
+
 int32_t BB_UART_get(BB_UART_t* uartPtr, uint8_t* data, uint16_t len) {
     if(uartPtr == NULL) return RC_ERROR_NULL;
     if(data == NULL) return RC_ERROR_NULL;
